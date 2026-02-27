@@ -25,6 +25,9 @@ import 'features/maths_kingdom/screens/addition_screen.dart';
 import 'features/maths_kingdom/screens/subtraction_screen.dart';
 import 'features/maths_kingdom/screens/multiplication_screen.dart';
 import 'features/maths_kingdom/screens/division_screen.dart';
+import 'features/animals_birds/screens/animals_birds_screen.dart';
+import 'features/animals_birds/screens/animal_learning_screen.dart';
+import 'features/animals_birds/screens/animal_identify_screen.dart';
 import 'features/parent/screens/parent_pin_screen.dart';
 import 'features/parent/screens/parent_dashboard_screen.dart';
 
@@ -146,6 +149,18 @@ class _ChhotuGeniusAppState extends State<ChhotuGeniusApp> {
         GoRoute(
           path: '/maths-kingdom/division',
           builder: (context, state) => const DivisionScreen(),
+        ),
+        GoRoute(
+          path: '/animals-birds',
+          builder: (context, state) => const AnimalsBirdsScreen(),
+        ),
+        GoRoute(
+          path: '/animals-birds/learn',
+          builder: (context, state) => const AnimalLearningScreen(),
+        ),
+        GoRoute(
+          path: '/animals-birds/identify',
+          builder: (context, state) => const AnimalIdentifyScreen(),
         ),
         GoRoute(
           path: '/parent',

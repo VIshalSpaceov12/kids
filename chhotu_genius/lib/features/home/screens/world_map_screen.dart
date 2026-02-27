@@ -191,6 +191,24 @@ class WorldMapScreen extends StatelessWidget {
                       ),
                       onTap: () => context.push('/maths-kingdom'),
                     ),
+                    if (profile.classLevel == 'nursery' ||
+                        profile.classLevel == 'kg') ...[
+                      const SizedBox(height: 16),
+                      LandCard(
+                        title: 'Animals & Birds',
+                        subtitle: 'Meet animals & birds of India!',
+                        emoji: '\u{1F43E}',
+                        gradientColors: const [
+                          AppColors.animalsBirds,
+                          Color(0xFFA1887F),
+                        ],
+                        progress: progressProvider.getModuleProgressPercent(
+                          'animals_birds',
+                          2,
+                        ),
+                        onTap: () => context.push('/animals-birds'),
+                      ),
+                    ],
                     const SizedBox(height: 32),
                   ],
                 ),

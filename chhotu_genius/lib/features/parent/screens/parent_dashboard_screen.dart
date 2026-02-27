@@ -210,6 +210,20 @@ class ParentDashboardScreen extends StatelessWidget {
               color: AppColors.mathsKingdom,
               stars: progressProvider.getModuleStars('maths_kingdom'),
             ),
+            if (profile.classLevel == 'nursery' ||
+                profile.classLevel == 'kg') ...[
+              const SizedBox(height: 12),
+              _ModuleProgressCard(
+                title: 'Animals & Birds',
+                emoji: '\u{1F43E}',
+                progress: progressProvider.getModuleProgressPercent(
+                  'animals_birds',
+                  2,
+                ),
+                color: AppColors.animalsBirds,
+                stars: progressProvider.getModuleStars('animals_birds'),
+              ),
+            ],
             const SizedBox(height: 32),
             // Back button
             Center(
