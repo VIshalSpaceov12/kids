@@ -1,0 +1,5 @@
+package com.chhotugenius.chhotu_genius
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
