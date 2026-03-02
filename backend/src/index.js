@@ -13,11 +13,24 @@ const adminRoutes = require('./routes/admin');
 
 const app = express();
 
+// Trust proxy (required for Render, rate limiter needs real client IP)
+if (env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // ---------------------
 // Security Middleware
 // ---------------------
 app.use(helmet());
-app.use(cors());
+
+// CORS configuration
+const corsOptions = {
+  origin: env.CORS_ORIGIN === '*'
+    ? '*'
+    : env.CORS_ORIGIN.split(',').map((o) => o.trim()),
+  credentials: true,
+};
+app.use(cors(corsOptions));
 
 // ---------------------
 // Body Parsing
@@ -91,8 +104,9 @@ app.use((err, req, res, _next) => {
 // Start Server
 // ---------------------
 const PORT = env.PORT;
+const HOST = '0.0.0.0';
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`
   =========================================
     Chhotu Genius API Server

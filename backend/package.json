@@ -1,11 +1,15 @@
 {
-  "name": "backend",
+  "name": "chhotu-genius-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Chhotu Genius API Server",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "build": "knex migrate:latest",
     "migrate": "knex migrate:latest",
     "seed": "knex seed:run",
     "migrate:rollback": "knex migrate:rollback",
