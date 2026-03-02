@@ -39,11 +39,12 @@ exports.up = async function (knex) {
     FROM admin_users
   `);
 
-  // 4. Migrate children → users (role='user') with child-specific fields
+  // 4. Migrate children → users (role='user') with child-specific fields (preserve IDs for FK refs)
   await knex.raw(`
-    INSERT INTO users (name, age, class_level, avatar, pet, language, role, is_active, created_at, updated_at)
-    SELECT name, age, class_level, avatar, pet, language, 'user', is_active, created_at, updated_at
+    INSERT INTO users (id, name, age, class_level, avatar, pet, language, role, is_active, created_at, updated_at)
+    SELECT id, name, age, class_level, avatar, pet, language, 'user', is_active, created_at, updated_at
     FROM children
+    ON CONFLICT (id) DO NOTHING
   `);
 
   // 5. Update progress table: change child_id → user_id
