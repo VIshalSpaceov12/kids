@@ -309,10 +309,10 @@ async function firebaseSync(req, res) {
   try {
     const { id, firebaseUid } = req.user;
 
-    // Update parent with latest Firebase info
+    // Update parent with latest Firebase token info (not DB values)
     await db('parents').where({ id }).update({
-      name: req.user.name,
-      email: req.user.email,
+      name: req.user.firebaseName || req.user.name,
+      email: req.user.firebaseEmail || req.user.email,
       firebase_uid: firebaseUid,
       updated_at: new Date(),
     });

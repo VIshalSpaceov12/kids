@@ -31,26 +31,40 @@ async function authenticate(req, res, next) {
     let parent = await db('parents').where({ firebase_uid: firebaseUid }).first();
 
     if (!parent) {
-      // Auto-create parent row on first API call after Firebase registration
       const name = decodedToken.name || decodedToken.email || 'Parent';
       const email = decodedToken.email || null;
 
-      const [newParent] = await db('parents')
-        .insert({
-          name,
-          email,
-          firebase_uid: firebaseUid,
-        })
-        .returning('*');
+      // Check if existing parent has this email (migration from old auth)
+      if (email) {
+        parent = await db('parents').where({ email }).first();
+        if (parent) {
+          await db('parents').where({ id: parent.id }).update({ firebase_uid: firebaseUid });
+        }
+      }
 
-      parent = newParent;
-      console.log(`Auto-created parent row for Firebase UID: ${firebaseUid}`);
+      if (!parent) {
+        try {
+          const [newParent] = await db('parents')
+            .insert({ name, email, firebase_uid: firebaseUid })
+            .returning('*');
+          parent = newParent;
+        } catch (err) {
+          if (err.code === '23505') {
+            // Race condition: another request just created it
+            parent = await db('parents').where({ firebase_uid: firebaseUid }).first();
+          }
+          if (!parent) throw err;
+        }
+      }
     }
 
     // Set req.user with DB UUID so downstream controllers work unchanged
+    // Include Firebase token claims for firebaseSync to use
     req.user = {
       id: parent.id,
       firebaseUid: decodedToken.uid,
+      firebaseName: decodedToken.name || null,
+      firebaseEmail: decodedToken.email || null,
       name: parent.name,
       email: parent.email,
       type: 'parent',

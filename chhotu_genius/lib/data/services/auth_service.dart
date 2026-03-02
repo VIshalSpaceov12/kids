@@ -32,8 +32,11 @@ class AuthService {
         await _api.saveToken(idToken);
       }
 
-      // Sync with backend
-      await _api.post('/auth/firebase-sync', {});
+      // Sync with backend and save parent data
+      final syncResult = await _api.post('/auth/firebase-sync', {});
+      if (syncResult['success'] == true && syncResult['parent'] != null) {
+        await _api.saveParentData(syncResult['parent'] as Map<String, dynamic>);
+      }
 
       return {'success': true};
     } on FirebaseAuthException catch (e) {
@@ -62,8 +65,11 @@ class AuthService {
         await _api.saveToken(idToken);
       }
 
-      // Sync with backend
-      await _api.post('/auth/firebase-sync', {});
+      // Sync with backend and save parent data
+      final syncResult = await _api.post('/auth/firebase-sync', {});
+      if (syncResult['success'] == true && syncResult['parent'] != null) {
+        await _api.saveParentData(syncResult['parent'] as Map<String, dynamic>);
+      }
 
       return {'success': true};
     } on FirebaseAuthException catch (e) {
