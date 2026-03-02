@@ -196,11 +196,11 @@ class _MissingNumberScreenState extends State<MissingNumberScreen> {
                       final isMissing = index == _missingIndex;
                       final showAnswer = isMissing && _isCorrect != null;
                       return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
-                          width: 64,
-                          height: 64,
+                          width: 56,
+                          height: 56,
                           decoration: BoxDecoration(
                             color: isMissing
                                 ? (showAnswer
