@@ -110,6 +110,24 @@ class WorldMapScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Column(
                   children: [
+                    if (profile.classLevel == 'nursery' ||
+                        profile.classLevel == 'kg') ...[
+                      LandCard(
+                        title: 'Rhymes',
+                        subtitle: 'Sing along with fun rhymes!',
+                        emoji: '\u{1F3B5}',
+                        gradientColors: const [
+                          AppColors.rhymes,
+                          Color(0xFFFF80AB),
+                        ],
+                        progress: progressProvider.getModuleProgressPercent(
+                          'rhymes',
+                          1,
+                        ),
+                        onTap: () => context.push('/rhymes'),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     LandCard(
                       title: 'Number Land',
                       subtitle: 'Count, learn & play with numbers!',

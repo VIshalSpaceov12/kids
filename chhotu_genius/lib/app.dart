@@ -23,6 +23,7 @@ import 'features/maths_kingdom/screens/addition_screen.dart';
 import 'features/maths_kingdom/screens/subtraction_screen.dart';
 import 'features/maths_kingdom/screens/multiplication_screen.dart';
 import 'features/maths_kingdom/screens/division_screen.dart';
+import 'features/rhymes/screens/rhymes_screen.dart';
 import 'features/animals_birds/screens/animals_birds_screen.dart';
 import 'features/animals_birds/screens/animal_learning_screen.dart';
 import 'features/animals_birds/screens/animal_identify_screen.dart';
@@ -158,6 +159,10 @@ class _ChhotuGeniusAppState extends State<ChhotuGeniusApp> {
         GoRoute(
           path: '/maths-kingdom/division',
           builder: (context, state) => const DivisionScreen(),
+        ),
+        GoRoute(
+          path: '/rhymes',
+          builder: (context, state) => const RhymesScreen(),
         ),
         GoRoute(
           path: '/animals-birds',

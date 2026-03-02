@@ -9,6 +9,7 @@ class AppColors {
   static const Color abcForest = Color(0xFF4CAF50);
   static const Color gujaratiJungle = Color(0xFFFF9800);
   static const Color mathsKingdom = Color(0xFF2196F3);
+  static const Color rhymes = Color(0xFFE91E63);
   static const Color animalsBirds = Color(0xFF8D6E63);
   static const Color background = Color(0xFFFFF8E1);
   static const Color cardWhite = Color(0xFFFFFFFF);
