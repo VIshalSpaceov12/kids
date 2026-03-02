@@ -6,27 +6,26 @@ const { generateOtp, verifyOtp } = require('../utils/otp');
 
 /**
  * POST /api/auth/register
- * Register a new parent with phone/email and send OTP.
+ * Register a new user with phone/email and send OTP.
  */
 async function register(req, res) {
   try {
     const { phone, email, name, password } = req.body;
 
-    // Check if parent already exists by phone or email
+    // Check if user already exists by phone or email
     let existing = null;
     if (phone) {
-      existing = await db('parents').where({ phone }).first();
+      existing = await db('users').where({ phone }).first();
     }
     if (!existing && email) {
-      existing = await db('parents').where({ email }).first();
+      existing = await db('users').where({ email }).first();
     }
 
     if (existing) {
-      // Parent exists, re-send OTP
       const otp = generateOtp(existing.id);
       const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-      await db('parents').where({ id: existing.id }).update({
+      await db('users').where({ id: existing.id }).update({
         otp,
         otp_expires_at: otpExpiresAt,
         updated_at: new Date(),
@@ -35,7 +34,7 @@ async function register(req, res) {
       return res.status(200).json({
         success: true,
         message: 'OTP sent successfully',
-        parentId: existing.id,
+        userId: existing.id,
       });
     }
 
@@ -45,32 +44,32 @@ async function register(req, res) {
       passwordHash = await bcrypt.hash(password, 10);
     }
 
-    // Create new parent
-    const [parent] = await db('parents')
+    // Create new user
+    const [user] = await db('users')
       .insert({
         name,
         phone: phone || null,
         email: email || null,
         password_hash: passwordHash,
+        role: 'user',
       })
       .returning('*');
 
     // Generate and store OTP
-    const otp = generateOtp(parent.id);
+    const otp = generateOtp(user.id);
     const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-    await db('parents').where({ id: parent.id }).update({
+    await db('users').where({ id: user.id }).update({
       otp,
       otp_expires_at: otpExpiresAt,
     });
 
-    // In production, send OTP via SMS/email here
-    console.log(`[DEV] OTP for parent ${parent.id}: ${otp}`);
+    console.log(`[DEV] OTP for user ${user.id}: ${otp}`);
 
     return res.status(201).json({
       success: true,
       message: 'OTP sent successfully',
-      parentId: parent.id,
+      userId: user.id,
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -95,19 +94,18 @@ async function register(req, res) {
  */
 async function verifyOtpHandler(req, res) {
   try {
-    const { parentId, otp } = req.body;
+    const { userId, otp } = req.body;
 
-    const parent = await db('parents').where({ id: parentId }).first();
+    const user = await db('users').where({ id: userId }).first();
 
-    if (!parent) {
+    if (!user) {
       return res.status(404).json({
         success: false,
-        message: 'Parent not found.',
+        message: 'User not found.',
       });
     }
 
-    // Verify OTP
-    const isValid = verifyOtp(parentId, otp);
+    const isValid = verifyOtp(userId, otp);
 
     if (!isValid) {
       return res.status(400).json({
@@ -116,21 +114,19 @@ async function verifyOtpHandler(req, res) {
       });
     }
 
-    // Clear OTP from database
-    await db('parents').where({ id: parentId }).update({
+    await db('users').where({ id: userId }).update({
       otp: null,
       otp_expires_at: null,
       updated_at: new Date(),
     });
 
-    // Generate JWT
     const token = jwt.sign(
       {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
-        phone: parent.phone,
-        type: 'parent',
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -139,11 +135,12 @@ async function verifyOtpHandler(req, res) {
     return res.status(200).json({
       success: true,
       token,
-      parent: {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
-        phone: parent.phone,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -163,7 +160,6 @@ async function refresh(req, res) {
   try {
     const { token } = req.body;
 
-    // Verify existing token (allow expired tokens to be refreshed)
     let decoded;
     try {
       decoded = jwt.verify(token, env.JWT_SECRET, { ignoreExpiration: true });
@@ -174,23 +170,21 @@ async function refresh(req, res) {
       });
     }
 
-    // Verify parent still exists
-    const parent = await db('parents').where({ id: decoded.id }).first();
-    if (!parent) {
+    const user = await db('users').where({ id: decoded.id }).first();
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found.',
       });
     }
 
-    // Generate new token
     const newToken = jwt.sign(
       {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
-        phone: parent.phone,
-        type: 'parent',
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -211,17 +205,16 @@ async function refresh(req, res) {
 
 /**
  * POST /api/auth/set-pin
- * Set a 4-digit PIN for the authenticated parent.
+ * Set a 4-digit PIN for the authenticated user.
  */
 async function setPin(req, res) {
   try {
     const { pin } = req.body;
-    const parentId = req.user.id;
+    const userId = req.user.id;
 
-    // Hash the PIN
     const pinHash = await bcrypt.hash(pin, 10);
 
-    await db('parents').where({ id: parentId }).update({
+    await db('users').where({ id: userId }).update({
       pin_hash: pinHash,
       updated_at: new Date(),
     });
@@ -241,24 +234,22 @@ async function setPin(req, res) {
 
 /**
  * POST /api/auth/login
- * Authenticate a parent with email and password.
+ * Authenticate a user with email and password.
  */
 async function login(req, res) {
   try {
     const { email, password } = req.body;
 
-    // Look up parent by email
-    const parent = await db('parents').where({ email }).first();
+    const user = await db('users').where({ email }).first();
 
-    if (!parent || !parent.password_hash) {
+    if (!user || !user.password_hash) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password.',
       });
     }
 
-    // Verify password
-    const isMatch = await bcrypt.compare(password, parent.password_hash);
+    const isMatch = await bcrypt.compare(password, user.password_hash);
 
     if (!isMatch) {
       return res.status(401).json({
@@ -267,14 +258,13 @@ async function login(req, res) {
       });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
-        phone: parent.phone,
-        type: 'parent',
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
       env.JWT_SECRET,
       { expiresIn: env.JWT_EXPIRES_IN }
@@ -283,11 +273,12 @@ async function login(req, res) {
     return res.status(200).json({
       success: true,
       token,
-      parent: {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
-        phone: parent.phone,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -301,30 +292,28 @@ async function login(req, res) {
 
 /**
  * POST /api/auth/firebase-sync
- * Sync parent data from Firebase to the local database.
- * Protected by authenticate middleware (req.user exists).
- * Updates the parent's name and email from Firebase data.
+ * Sync user data from Firebase to the local database.
  */
 async function firebaseSync(req, res) {
   try {
     const { id, firebaseUid } = req.user;
 
-    // Update parent with latest Firebase token info (not DB values)
-    await db('parents').where({ id }).update({
+    await db('users').where({ id }).update({
       name: req.user.firebaseName || req.user.name,
       email: req.user.firebaseEmail || req.user.email,
       firebase_uid: firebaseUid,
       updated_at: new Date(),
     });
 
-    const parent = await db('parents').where({ id }).first();
+    const user = await db('users').where({ id }).first();
 
     return res.status(200).json({
       success: true,
-      parent: {
-        id: parent.id,
-        name: parent.name,
-        email: parent.email,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {

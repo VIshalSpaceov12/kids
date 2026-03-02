@@ -45,9 +45,9 @@ const loginSchema = Joi.object({
 });
 
 const verifyOtpSchema = Joi.object({
-  parentId: Joi.string().uuid().required().messages({
-    'string.guid': 'Parent ID must be a valid UUID',
-    'any.required': 'Parent ID is required',
+  userId: Joi.string().uuid().required().messages({
+    'string.guid': 'User ID must be a valid UUID',
+    'any.required': 'User ID is required',
   }),
   otp: Joi.string().length(4).required().messages({
     'string.length': 'OTP must be exactly 4 digits',

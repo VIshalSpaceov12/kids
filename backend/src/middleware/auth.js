@@ -4,10 +4,10 @@ const jwt = require('jsonwebtoken');
 const env = require('../config/env');
 
 /**
- * Firebase authentication middleware for parent users.
+ * Firebase authentication middleware for app users.
  * Extracts Firebase ID token from Authorization: Bearer <token> header.
  * Verifies the token with Firebase Admin SDK.
- * Looks up or auto-creates the parent in the database.
+ * Looks up or auto-creates the user in the database.
  * Attaches user payload to req.user with DB UUID as id.
  */
 async function authenticate(req, res, next) {
@@ -27,47 +27,45 @@ async function authenticate(req, res, next) {
     const decodedToken = await admin.auth().verifyIdToken(token);
     const firebaseUid = decodedToken.uid;
 
-    // Look up parent by firebase_uid
-    let parent = await db('parents').where({ firebase_uid: firebaseUid }).first();
+    // Look up user by firebase_uid
+    let user = await db('users').where({ firebase_uid: firebaseUid }).first();
 
-    if (!parent) {
-      const name = decodedToken.name || decodedToken.email || 'Parent';
+    if (!user) {
+      const name = decodedToken.name || decodedToken.email || 'User';
       const email = decodedToken.email || null;
 
-      // Check if existing parent has this email (migration from old auth)
+      // Check if existing user has this email (migration from old auth)
       if (email) {
-        parent = await db('parents').where({ email }).first();
-        if (parent) {
-          await db('parents').where({ id: parent.id }).update({ firebase_uid: firebaseUid });
+        user = await db('users').where({ email }).first();
+        if (user) {
+          await db('users').where({ id: user.id }).update({ firebase_uid: firebaseUid });
         }
       }
 
-      if (!parent) {
+      if (!user) {
         try {
-          const [newParent] = await db('parents')
-            .insert({ name, email, firebase_uid: firebaseUid })
+          const [newUser] = await db('users')
+            .insert({ name, email, firebase_uid: firebaseUid, role: 'user' })
             .returning('*');
-          parent = newParent;
+          user = newUser;
         } catch (err) {
           if (err.code === '23505') {
             // Race condition: another request just created it
-            parent = await db('parents').where({ firebase_uid: firebaseUid }).first();
+            user = await db('users').where({ firebase_uid: firebaseUid }).first();
           }
-          if (!parent) throw err;
+          if (!user) throw err;
         }
       }
     }
 
-    // Set req.user with DB UUID so downstream controllers work unchanged
-    // Include Firebase token claims for firebaseSync to use
     req.user = {
-      id: parent.id,
+      id: user.id,
       firebaseUid: decodedToken.uid,
       firebaseName: decodedToken.name || null,
       firebaseEmail: decodedToken.email || null,
-      name: parent.name,
-      email: parent.email,
-      type: 'parent',
+      name: user.name,
+      email: user.email,
+      role: user.role,
     };
 
     next();
@@ -82,7 +80,6 @@ async function authenticate(req, res, next) {
 
 /**
  * JWT authentication middleware for admin users.
- * Same as before - still JWT based for admin routes.
  */
 function authenticateAdmin(req, res, next) {
   const authHeader = req.headers.authorization;

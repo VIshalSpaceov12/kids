@@ -11,18 +11,18 @@ async function login(req, res) {
   try {
     const { email, password } = req.body;
 
-    const admin = await db('admin_users')
-      .where({ email, is_active: true })
+    const user = await db('users')
+      .where({ email, role: 'admin', is_active: true })
       .first();
 
-    if (!admin) {
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password.',
       });
     }
 
-    const isValidPassword = await bcrypt.compare(password, admin.password_hash);
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) {
       return res.status(401).json({
         success: false,
@@ -32,10 +32,10 @@ async function login(req, res) {
 
     const token = jwt.sign(
       {
-        id: admin.id,
-        name: admin.name,
-        email: admin.email,
-        role: admin.role,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
         type: 'admin',
       },
       env.JWT_SECRET,
@@ -46,10 +46,10 @@ async function login(req, res) {
       success: true,
       token,
       admin: {
-        id: admin.id,
-        name: admin.name,
-        email: admin.email,
-        role: admin.role,
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
       },
     });
   } catch (error) {
@@ -67,14 +67,15 @@ async function login(req, res) {
  */
 async function dashboard(req, res) {
   try {
-    // Total users (parents)
-    const totalUsersResult = await db('parents').count('* as count').first();
+    // Total users (non-admin)
+    const totalUsersResult = await db('users').where({ role: 'user' }).count('* as count').first();
     const totalUsers = parseInt(totalUsersResult.count, 10);
 
-    // Active today (parents who registered or updated today)
+    // Active today
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const activeTodayResult = await db('parents')
+    const activeTodayResult = await db('users')
+      .where({ role: 'user' })
       .where('updated_at', '>=', today)
       .count('* as count')
       .first();
@@ -83,20 +84,14 @@ async function dashboard(req, res) {
     // New this week
     const weekAgo = new Date();
     weekAgo.setDate(weekAgo.getDate() - 7);
-    const newThisWeekResult = await db('parents')
+    const newThisWeekResult = await db('users')
+      .where({ role: 'user' })
       .where('created_at', '>=', weekAgo)
       .count('* as count')
       .first();
     const newThisWeek = parseInt(newThisWeekResult.count, 10);
 
-    // Total children
-    const totalChildrenResult = await db('children')
-      .where({ is_active: true })
-      .count('* as count')
-      .first();
-    const totalChildren = parseInt(totalChildrenResult.count, 10);
-
-    // Module engagement: for each module, count how many progress entries exist
+    // Module engagement
     const moduleEngagement = await db('modules')
       .leftJoin('lessons', 'modules.id', 'lessons.module_id')
       .leftJoin('progress', 'lessons.id', 'progress.lesson_id')
@@ -110,7 +105,7 @@ async function dashboard(req, res) {
         'modules.color'
       )
       .count('progress.id as total_attempts')
-      .countDistinct('progress.child_id as unique_learners')
+      .countDistinct('progress.user_id as unique_learners')
       .orderBy('modules.display_order', 'asc');
 
     return res.status(200).json({
@@ -119,7 +114,6 @@ async function dashboard(req, res) {
         totalUsers,
         activeToday,
         newThisWeek,
-        totalChildren,
       },
       moduleEngagement: moduleEngagement.map((m) => ({
         id: m.id,
@@ -142,75 +136,41 @@ async function dashboard(req, res) {
 
 /**
  * GET /api/admin/users
- * Paginated list of parents with children count.
+ * Paginated list of users.
  */
 async function getUsers(req, res) {
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 20;
     const search = req.query.search || '';
-    const classLevel = req.query.classLevel || '';
+    const role = req.query.role || '';
     const offset = (page - 1) * limit;
 
-    let query = db('parents')
-      .select(
-        'parents.id',
-        'parents.name',
-        'parents.email',
-        'parents.phone',
-        'parents.created_at'
-      );
+    let query = db('users').select(
+      'id', 'name', 'email', 'phone', 'role', 'age', 'class_level', 'is_active', 'created_at'
+    );
 
-    // Search filter
     if (search) {
       query = query.where(function () {
-        this.where('parents.name', 'ilike', `%${search}%`)
-          .orWhere('parents.email', 'ilike', `%${search}%`)
-          .orWhere('parents.phone', 'ilike', `%${search}%`);
+        this.where('name', 'ilike', `%${search}%`)
+          .orWhere('email', 'ilike', `%${search}%`)
+          .orWhere('phone', 'ilike', `%${search}%`);
       });
     }
 
-    // Class level filter: only parents who have children at that class level
-    if (classLevel) {
-      query = query.whereExists(function () {
-        this.select('*')
-          .from('children')
-          .whereRaw('children.parent_id = parents.id')
-          .where('children.class_level', classLevel)
-          .where('children.is_active', true);
-      });
+    if (role) {
+      query = query.where({ role });
     }
 
-    // Get total count
     const countQuery = query.clone();
-    const totalResult = await countQuery.clearSelect().count('parents.id as count').first();
+    const totalResult = await countQuery.clearSelect().count('id as count').first();
     const total = parseInt(totalResult.count, 10);
 
-    // Get paginated results
-    const users = await query.orderBy('parents.created_at', 'desc').limit(limit).offset(offset);
-
-    // Get children count for each user
-    const userIds = users.map((u) => u.id);
-    const childCounts = await db('children')
-      .whereIn('parent_id', userIds)
-      .where({ is_active: true })
-      .groupBy('parent_id')
-      .select('parent_id')
-      .count('* as children_count');
-
-    const childCountMap = {};
-    childCounts.forEach((row) => {
-      childCountMap[row.parent_id] = parseInt(row.children_count, 10);
-    });
-
-    const result = users.map((u) => ({
-      ...u,
-      childrenCount: childCountMap[u.id] || 0,
-    }));
+    const users = await query.orderBy('created_at', 'desc').limit(limit).offset(offset);
 
     return res.status(200).json({
       success: true,
-      users: result,
+      users,
       pagination: {
         page,
         limit,
@@ -229,64 +189,52 @@ async function getUsers(req, res) {
 
 /**
  * GET /api/admin/users/:id
- * Detailed parent profile with children and progress.
+ * Detailed user profile with progress.
  */
 async function getUserDetail(req, res) {
   try {
     const { id } = req.params;
 
-    const parent = await db('parents')
+    const user = await db('users')
       .where({ id })
-      .select('id', 'name', 'email', 'phone', 'created_at', 'updated_at')
+      .select('id', 'name', 'email', 'phone', 'role', 'age', 'class_level', 'avatar', 'pet', 'language', 'is_active', 'created_at', 'updated_at')
       .first();
 
-    if (!parent) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         message: 'User not found.',
       });
     }
 
-    // Get children
-    const children = await db('children')
-      .where({ parent_id: id, is_active: true })
-      .select('*');
+    // Get progress
+    const progress = await db('progress')
+      .where({ 'progress.user_id': id })
+      .join('lessons', 'progress.lesson_id', 'lessons.id')
+      .join('modules', 'lessons.module_id', 'modules.id')
+      .select(
+        'progress.score',
+        'progress.stars',
+        'progress.completed',
+        'progress.attempts',
+        'lessons.title as lesson_title',
+        'modules.name as module_name'
+      );
 
-    // Get progress for each child
-    const childrenWithProgress = await Promise.all(
-      children.map(async (child) => {
-        const progress = await db('progress')
-          .where({ 'progress.child_id': child.id })
-          .join('lessons', 'progress.lesson_id', 'lessons.id')
-          .join('modules', 'lessons.module_id', 'modules.id')
-          .select(
-            'progress.score',
-            'progress.stars',
-            'progress.completed',
-            'progress.attempts',
-            'lessons.title as lesson_title',
-            'modules.name as module_name'
-          );
-
-        const totalStars = progress.reduce((sum, p) => sum + p.stars, 0);
-        const completedLessons = progress.filter((p) => p.completed).length;
-
-        return {
-          ...child,
-          stats: {
-            totalStars,
-            completedLessons,
-            totalAttempts: progress.reduce((sum, p) => sum + p.attempts, 0),
-          },
-          progress,
-        };
-      })
-    );
+    const totalStars = progress.reduce((sum, p) => sum + p.stars, 0);
+    const completedLessons = progress.filter((p) => p.completed).length;
 
     return res.status(200).json({
       success: true,
-      parent,
-      children: childrenWithProgress,
+      user: {
+        ...user,
+        stats: {
+          totalStars,
+          completedLessons,
+          totalAttempts: progress.reduce((sum, p) => sum + p.attempts, 0),
+        },
+      },
+      progress,
     });
   } catch (error) {
     console.error('Get user detail error:', error);
@@ -343,36 +291,19 @@ async function getContentModules(req, res) {
 
 /**
  * POST /api/admin/content/lessons
- * Create a new lesson.
  */
 async function createLesson(req, res) {
   try {
-    const {
-      moduleId,
-      title,
-      slug,
-      description,
-      difficultyLevel,
-      classRangeMin,
-      classRangeMax,
-      contentJson,
-      displayOrder,
-    } = req.body;
+    const { moduleId, title, slug, description, difficultyLevel, classRangeMin, classRangeMax, contentJson, displayOrder } = req.body;
 
-    // Verify module exists
     const moduleRecord = await db('modules').where({ id: moduleId }).first();
     if (!moduleRecord) {
-      return res.status(404).json({
-        success: false,
-        message: 'Module not found.',
-      });
+      return res.status(404).json({ success: false, message: 'Module not found.' });
     }
 
     const [lesson] = await db('lessons')
       .insert({
-        module_id: moduleId,
-        title,
-        slug,
+        module_id: moduleId, title, slug,
         description: description || null,
         difficulty_level: difficultyLevel || 1,
         class_range_min: classRangeMin || null,
@@ -382,52 +313,27 @@ async function createLesson(req, res) {
       })
       .returning('*');
 
-    return res.status(201).json({
-      success: true,
-      lesson,
-    });
+    return res.status(201).json({ success: true, lesson });
   } catch (error) {
     console.error('Create lesson error:', error);
-
     if (error.code === '23505') {
-      return res.status(409).json({
-        success: false,
-        message: 'A lesson with this slug already exists in this module.',
-      });
+      return res.status(409).json({ success: false, message: 'A lesson with this slug already exists in this module.' });
     }
-
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 
 /**
  * PUT /api/admin/content/lessons/:id
- * Update a lesson.
  */
 async function updateLesson(req, res) {
   try {
     const { id } = req.params;
-    const {
-      title,
-      slug,
-      description,
-      difficultyLevel,
-      classRangeMin,
-      classRangeMax,
-      contentJson,
-      displayOrder,
-      isActive,
-    } = req.body;
+    const { title, slug, description, difficultyLevel, classRangeMin, classRangeMax, contentJson, displayOrder, isActive } = req.body;
 
     const lesson = await db('lessons').where({ id }).first();
     if (!lesson) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lesson not found.',
-      });
+      return res.status(404).json({ success: false, message: 'Lesson not found.' });
     }
 
     const updateData = { updated_at: new Date() };
@@ -442,41 +348,28 @@ async function updateLesson(req, res) {
     if (isActive !== undefined) updateData.is_active = isActive;
 
     const [updated] = await db('lessons').where({ id }).update(updateData).returning('*');
-
-    return res.status(200).json({
-      success: true,
-      lesson: updated,
-    });
+    return res.status(200).json({ success: true, lesson: updated });
   } catch (error) {
     console.error('Update lesson error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 
 /**
  * POST /api/admin/content/questions
- * Create a new question.
  */
 async function createQuestion(req, res) {
   try {
     const { lessonId, type, questionData, correctAnswer, mediaUrls, displayOrder } = req.body;
 
-    // Verify lesson exists
     const lesson = await db('lessons').where({ id: lessonId }).first();
     if (!lesson) {
-      return res.status(404).json({
-        success: false,
-        message: 'Lesson not found.',
-      });
+      return res.status(404).json({ success: false, message: 'Lesson not found.' });
     }
 
     const [question] = await db('questions')
       .insert({
-        lesson_id: lessonId,
-        type,
+        lesson_id: lessonId, type,
         question_data: JSON.stringify(questionData),
         correct_answer: JSON.stringify(correctAnswer),
         media_urls: mediaUrls ? JSON.stringify(mediaUrls) : null,
@@ -484,22 +377,15 @@ async function createQuestion(req, res) {
       })
       .returning('*');
 
-    return res.status(201).json({
-      success: true,
-      question,
-    });
+    return res.status(201).json({ success: true, question });
   } catch (error) {
     console.error('Create question error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 
 /**
  * PUT /api/admin/content/questions/:id
- * Update a question.
  */
 async function updateQuestion(req, res) {
   try {
@@ -508,10 +394,7 @@ async function updateQuestion(req, res) {
 
     const question = await db('questions').where({ id }).first();
     if (!question) {
-      return res.status(404).json({
-        success: false,
-        message: 'Question not found.',
-      });
+      return res.status(404).json({ success: false, message: 'Question not found.' });
     }
 
     const updateData = { updated_at: new Date() };
@@ -523,60 +406,33 @@ async function updateQuestion(req, res) {
     if (isActive !== undefined) updateData.is_active = isActive;
 
     const [updated] = await db('questions').where({ id }).update(updateData).returning('*');
-
-    return res.status(200).json({
-      success: true,
-      question: updated,
-    });
+    return res.status(200).json({ success: true, question: updated });
   } catch (error) {
     console.error('Update question error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 
 /**
  * DELETE /api/admin/content/questions/:id
- * Delete a question.
  */
 async function deleteQuestion(req, res) {
   try {
     const { id } = req.params;
-
     const question = await db('questions').where({ id }).first();
     if (!question) {
-      return res.status(404).json({
-        success: false,
-        message: 'Question not found.',
-      });
+      return res.status(404).json({ success: false, message: 'Question not found.' });
     }
-
     await db('questions').where({ id }).del();
-
-    return res.status(200).json({
-      success: true,
-      message: 'Question deleted.',
-    });
+    return res.status(200).json({ success: true, message: 'Question deleted.' });
   } catch (error) {
     console.error('Delete question error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Internal server error',
-    });
+    return res.status(500).json({ success: false, message: 'Internal server error' });
   }
 }
 
 module.exports = {
-  login,
-  dashboard,
-  getUsers,
-  getUserDetail,
-  getContentModules,
-  createLesson,
-  updateLesson,
-  createQuestion,
-  updateQuestion,
-  deleteQuestion,
+  login, dashboard, getUsers, getUserDetail,
+  getContentModules, createLesson, updateLesson,
+  createQuestion, updateQuestion, deleteQuestion,
 };

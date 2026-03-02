@@ -1,32 +1,13 @@
 const db = require('../config/database');
 
 /**
- * Helper: verify that a child belongs to the authenticated parent.
- */
-async function verifyChildOwnership(parentId, childId) {
-  const child = await db('children')
-    .where({ id: childId, parent_id: parentId, is_active: true })
-    .first();
-  return child;
-}
-
-/**
  * POST /api/progress
- * Save or update progress for a child on a lesson.
+ * Save or update progress for a user on a lesson.
  */
 async function saveProgress(req, res) {
   try {
-    const parentId = req.user.id;
-    const { childId, lessonId, score, stars, completed } = req.body;
-
-    // Verify child belongs to parent
-    const child = await verifyChildOwnership(parentId, childId);
-    if (!child) {
-      return res.status(403).json({
-        success: false,
-        message: 'Child does not belong to this parent.',
-      });
-    }
+    const userId = req.user.id;
+    const { lessonId, score, stars, completed } = req.body;
 
     // Verify lesson exists
     const lesson = await db('lessons').where({ id: lessonId, is_active: true }).first();
@@ -39,13 +20,12 @@ async function saveProgress(req, res) {
 
     // Check if progress already exists
     const existing = await db('progress')
-      .where({ child_id: childId, lesson_id: lessonId })
+      .where({ user_id: userId, lesson_id: lessonId })
       .first();
 
     let progress;
 
     if (existing) {
-      // Update existing progress (keep best score)
       const updateData = {
         score: Math.max(existing.score, score),
         stars: Math.max(existing.stars, stars),
@@ -63,10 +43,9 @@ async function saveProgress(req, res) {
         .update(updateData)
         .returning('*');
     } else {
-      // Create new progress
       [progress] = await db('progress')
         .insert({
-          child_id: childId,
+          user_id: userId,
           lesson_id: lessonId,
           score,
           stars,
@@ -90,25 +69,15 @@ async function saveProgress(req, res) {
 }
 
 /**
- * GET /api/progress/:childId
- * Get all progress for a child.
+ * GET /api/progress
+ * Get all progress for the authenticated user.
  */
-async function getChildProgress(req, res) {
+async function getUserProgress(req, res) {
   try {
-    const parentId = req.user.id;
-    const { childId } = req.params;
-
-    // Verify child belongs to parent
-    const child = await verifyChildOwnership(parentId, childId);
-    if (!child) {
-      return res.status(403).json({
-        success: false,
-        message: 'Child does not belong to this parent.',
-      });
-    }
+    const userId = req.user.id;
 
     const progress = await db('progress')
-      .where({ 'progress.child_id': childId })
+      .where({ 'progress.user_id': userId })
       .join('lessons', 'progress.lesson_id', 'lessons.id')
       .join('modules', 'lessons.module_id', 'modules.id')
       .select(
@@ -137,10 +106,6 @@ async function getChildProgress(req, res) {
 
     return res.status(200).json({
       success: true,
-      child: {
-        id: child.id,
-        name: child.name,
-      },
       summary: {
         totalLessons: parseInt(totalLessons.count, 10),
         completedLessons: completedCount,
@@ -149,7 +114,7 @@ async function getChildProgress(req, res) {
       progress,
     });
   } catch (error) {
-    console.error('Get child progress error:', error);
+    console.error('Get user progress error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -158,24 +123,14 @@ async function getChildProgress(req, res) {
 }
 
 /**
- * GET /api/progress/:childId/module/:moduleSlug
- * Get progress for a specific module with stats.
+ * GET /api/progress/module/:moduleSlug
+ * Get progress for a specific module.
  */
 async function getModuleProgress(req, res) {
   try {
-    const parentId = req.user.id;
-    const { childId, moduleSlug } = req.params;
+    const userId = req.user.id;
+    const { moduleSlug } = req.params;
 
-    // Verify child belongs to parent
-    const child = await verifyChildOwnership(parentId, childId);
-    if (!child) {
-      return res.status(403).json({
-        success: false,
-        message: 'Child does not belong to this parent.',
-      });
-    }
-
-    // Find module
     const moduleRecord = await db('modules').where({ slug: moduleSlug, is_active: true }).first();
     if (!moduleRecord) {
       return res.status(404).json({
@@ -184,16 +139,14 @@ async function getModuleProgress(req, res) {
       });
     }
 
-    // Get all lessons in module
     const lessons = await db('lessons')
       .where({ module_id: moduleRecord.id, is_active: true })
       .select('id', 'title', 'slug', 'difficulty_level', 'display_order')
       .orderBy('display_order', 'asc');
 
-    // Get progress for these lessons
     const lessonIds = lessons.map((l) => l.id);
     const progressRows = await db('progress')
-      .where({ child_id: childId })
+      .where({ user_id: userId })
       .whereIn('lesson_id', lessonIds)
       .select('*');
 
@@ -202,7 +155,6 @@ async function getModuleProgress(req, res) {
       progressMap[p.lesson_id] = p;
     });
 
-    // Combine lessons with progress
     const lessonsWithProgress = lessons.map((l) => ({
       ...l,
       progress: progressMap[l.id] || null,
@@ -211,7 +163,6 @@ async function getModuleProgress(req, res) {
       score: progressMap[l.id] ? progressMap[l.id].score : 0,
     }));
 
-    // Stats
     const completedCount = lessonsWithProgress.filter((l) => l.completed).length;
     const totalStars = lessonsWithProgress.reduce((sum, l) => sum + l.stars, 0);
     const maxStars = lessons.length * 3;
@@ -251,33 +202,19 @@ async function getModuleProgress(req, res) {
  */
 async function syncProgress(req, res) {
   try {
-    const parentId = req.user.id;
+    const userId = req.user.id;
     const { entries } = req.body;
 
     const results = [];
 
     for (const entry of entries) {
-      const { childId, lessonId, score, stars, completedAt } = entry;
+      const { lessonId, score, stars, completedAt } = entry;
 
-      // Verify child belongs to parent
-      const child = await verifyChildOwnership(parentId, childId);
-      if (!child) {
-        results.push({
-          childId,
-          lessonId,
-          success: false,
-          message: 'Child does not belong to this parent.',
-        });
-        continue;
-      }
-
-      // Check if progress exists
       const existing = await db('progress')
-        .where({ child_id: childId, lesson_id: lessonId })
+        .where({ user_id: userId, lesson_id: lessonId })
         .first();
 
       if (existing) {
-        // Update with best scores
         const updateData = {
           score: Math.max(existing.score, score || 0),
           stars: Math.max(existing.stars, stars || 0),
@@ -291,20 +228,17 @@ async function syncProgress(req, res) {
         }
 
         await db('progress').where({ id: existing.id }).update(updateData);
-
-        results.push({ childId, lessonId, success: true, action: 'updated' });
+        results.push({ lessonId, success: true, action: 'updated' });
       } else {
-        // Insert new
         await db('progress').insert({
-          child_id: childId,
+          user_id: userId,
           lesson_id: lessonId,
           score: score || 0,
           stars: stars || 0,
           completed: !!completedAt,
           completed_at: completedAt ? new Date(completedAt) : null,
         });
-
-        results.push({ childId, lessonId, success: true, action: 'created' });
+        results.push({ lessonId, success: true, action: 'created' });
       }
     }
 
@@ -322,4 +256,4 @@ async function syncProgress(req, res) {
   }
 }
 
-module.exports = { saveProgress, getChildProgress, getModuleProgress, syncProgress };
+module.exports = { saveProgress, getUserProgress, getModuleProgress, syncProgress };

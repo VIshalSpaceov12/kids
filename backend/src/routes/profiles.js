@@ -17,34 +17,7 @@ const updateProfileSchema = Joi.object({
     .pattern(/^[+]?[\d\s-]{7,20}$/)
     .allow(null, '')
     .optional(),
-}).min(1).messages({
-  'object.min': 'At least one field must be provided for update',
-});
-
-const createChildSchema = Joi.object({
-  name: Joi.string().min(1).max(100).required().messages({
-    'any.required': 'Child name is required',
-  }),
-  age: Joi.number().integer().min(2).max(12).required().messages({
-    'number.min': 'Age must be at least 2',
-    'number.max': 'Age must be at most 12',
-    'any.required': 'Age is required',
-  }),
-  classLevel: Joi.string()
-    .valid('nursery', 'lkg', 'ukg', 'kg', 'class1', 'class2', 'class3', 'class4', 'class5')
-    .required()
-    .messages({
-      'any.only': 'Class level must be one of: nursery, lkg, ukg, kg, class1-class5',
-      'any.required': 'Class level is required',
-    }),
-  avatar: Joi.string().max(50).optional().default('lion'),
-  pet: Joi.string().max(50).optional().default('cat'),
-  language: Joi.string().max(5).optional().default('en'),
-});
-
-const updateChildSchema = Joi.object({
-  name: Joi.string().min(1).max(100).optional(),
-  age: Joi.number().integer().min(2).max(12).optional(),
+  age: Joi.number().integer().min(2).max(100).optional(),
   classLevel: Joi.string()
     .valid('nursery', 'lkg', 'ukg', 'kg', 'class1', 'class2', 'class3', 'class4', 'class5')
     .optional(),
@@ -58,9 +31,5 @@ const updateChildSchema = Joi.object({
 // Routes
 router.get('/me', profileController.getProfile);
 router.put('/me', validate(updateProfileSchema), profileController.updateProfile);
-router.post('/children', validate(createChildSchema), profileController.createChild);
-router.get('/children', profileController.getChildren);
-router.put('/children/:id', validate(updateChildSchema), profileController.updateChild);
-router.delete('/children/:id', profileController.deleteChild);
 
 module.exports = router;

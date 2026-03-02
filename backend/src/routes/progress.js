@@ -11,10 +11,6 @@ router.use(authenticate);
 
 // Validation schemas
 const saveProgressSchema = Joi.object({
-  childId: Joi.string().uuid().required().messages({
-    'string.guid': 'Child ID must be a valid UUID',
-    'any.required': 'Child ID is required',
-  }),
   lessonId: Joi.string().uuid().required().messages({
     'string.guid': 'Lesson ID must be a valid UUID',
     'any.required': 'Lesson ID is required',
@@ -36,7 +32,6 @@ const syncProgressSchema = Joi.object({
   entries: Joi.array()
     .items(
       Joi.object({
-        childId: Joi.string().uuid().required(),
         lessonId: Joi.string().uuid().required(),
         score: Joi.number().integer().min(0).max(100).optional().default(0),
         stars: Joi.number().integer().min(0).max(3).optional().default(0),
@@ -53,8 +48,8 @@ const syncProgressSchema = Joi.object({
 
 // Routes
 router.post('/', validate(saveProgressSchema), progressController.saveProgress);
-router.get('/:childId', progressController.getChildProgress);
-router.get('/:childId/module/:moduleSlug', progressController.getModuleProgress);
+router.get('/', progressController.getUserProgress);
+router.get('/module/:moduleSlug', progressController.getModuleProgress);
 router.post('/sync', validate(syncProgressSchema), progressController.syncProgress);
 
 module.exports = router;
