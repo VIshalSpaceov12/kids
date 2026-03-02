@@ -19,6 +19,7 @@ class AppStateProvider extends ChangeNotifier {
 
   AppStateProvider(this._storageService, this._authService) {
     _loadFromStorage();
+    _tryRestoreFromServer();
   }
 
   // Getters
@@ -35,6 +36,14 @@ class AppStateProvider extends ChangeNotifier {
     _profile = _storageService.getProfile();
     _isLoggedIn = _authService.isLoggedIn;
     notifyListeners();
+  }
+
+  /// On app start, if logged in but not onboarded locally, try fetching profile
+  Future<void> _tryRestoreFromServer() async {
+    if (_isLoggedIn && !_isOnboarded) {
+      await fetchAndRestoreProfile();
+      notifyListeners();
+    }
   }
 
   // Onboarding setters
@@ -63,6 +72,16 @@ class AppStateProvider extends ChangeNotifier {
       _isLoggedIn = true;
       _authError = null;
       await fetchAndRestoreProfile();
+
+      // If profile wasn't fully restored (no class_level), pre-populate
+      // onboarding name from Firebase display name so it's not blank
+      if (!_isOnboarded && _onboardingName.isEmpty) {
+        final user = _authService.userData;
+        if (user != null) {
+          _onboardingName = user['name'] as String? ?? '';
+        }
+      }
+
       notifyListeners();
       return true;
     } else {
@@ -116,8 +135,14 @@ class AppStateProvider extends ChangeNotifier {
         final classLevel = userData['class_level'] as String? ?? '';
         final avatar = userData['avatar'] as String? ?? 'lion';
 
-        // Only restore if user has completed onboarding (has classLevel set)
+        // Always pre-populate onboarding fields from server
+        // so name/avatar aren't blank if user needs to re-onboard
+        if (name.isNotEmpty) _onboardingName = name;
+        if (avatar.isNotEmpty) _onboardingAvatar = avatar;
+
+        // Only fully restore if user has completed onboarding (has classLevel)
         if (classLevel.isNotEmpty) {
+          _onboardingClassLevel = classLevel;
           final profile = ChildProfile(
             name: name,
             age: userData['age'] as int? ?? 5,
@@ -148,22 +173,27 @@ class AppStateProvider extends ChangeNotifier {
     _isOnboarded = true;
     await _storageService.saveProfile(profile);
     await _storageService.trackActiveDay();
-    notifyListeners();
 
-    // Save to server (PUT /profiles/me)
+    // Save to server BEFORE notifyListeners to ensure it completes
+    // before GoRouter redirects away
     if (_isLoggedIn) {
-      final result = await _authService.updateProfile(
-        name: _onboardingName,
-        classLevel: _onboardingClassLevel,
-        avatar: _onboardingAvatar,
-      );
-      if (result['success'] == true && result['user'] != null) {
-        final serverUser = result['user'] as Map<String, dynamic>;
-        _profile = _profile!.copyWith(serverId: serverUser['id'] as String? ?? '');
-        await _storageService.saveProfile(_profile!);
-        notifyListeners();
+      try {
+        final result = await _authService.updateProfile(
+          name: _onboardingName,
+          classLevel: _onboardingClassLevel,
+          avatar: _onboardingAvatar,
+        );
+        if (result['success'] == true && result['user'] != null) {
+          final serverUser = result['user'] as Map<String, dynamic>;
+          _profile = _profile!.copyWith(serverId: serverUser['id'] as String? ?? '');
+          await _storageService.saveProfile(_profile!);
+        }
+      } catch (_) {
+        // Server sync failed — profile is saved locally, will retry on next app open
       }
     }
+
+    notifyListeners();
   }
 
   // Update class level on existing profile
