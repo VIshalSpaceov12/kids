@@ -71,12 +71,21 @@ class AppStateProvider extends ChangeNotifier {
     if (result['success'] == true) {
       _isLoggedIn = true;
       _authError = null;
-      await fetchAndRestoreProfile();
 
-      // If profile wasn't fully restored (no class_level), pre-populate
-      // onboarding name from Firebase display name so it's not blank
+      // Try restoring from the sync response first (has full profile data)
+      final syncUser = result['user'] as Map<String, dynamic>?;
+      if (syncUser != null) {
+        _restoreFromUserData(syncUser);
+      }
+
+      // Fallback: fetch from /profiles/me if sync didn't have profile data
+      if (!_isOnboarded) {
+        await fetchAndRestoreProfile();
+      }
+
+      // Pre-populate onboarding name so it's not blank if user needs re-onboarding
       if (!_isOnboarded && _onboardingName.isEmpty) {
-        final user = _authService.userData;
+        final user = syncUser ?? _authService.userData;
         if (user != null) {
           _onboardingName = user['name'] as String? ?? '';
         }
@@ -125,37 +134,40 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restore profile from user data map (used by login sync and fetchAndRestore)
+  void _restoreFromUserData(Map<String, dynamic> userData) {
+    final name = userData['name'] as String? ?? '';
+    final classLevel = userData['class_level'] as String? ?? '';
+    final avatar = userData['avatar'] as String? ?? 'lion';
+
+    // Always pre-populate onboarding fields so name/avatar aren't blank
+    if (name.isNotEmpty) _onboardingName = name;
+    if (avatar.isNotEmpty) _onboardingAvatar = avatar;
+
+    // Only fully restore if user completed onboarding (has classLevel)
+    if (classLevel.isNotEmpty) {
+      _onboardingClassLevel = classLevel;
+      final profile = ChildProfile(
+        name: name,
+        age: userData['age'] as int? ?? 5,
+        classLevel: classLevel,
+        avatar: avatar,
+        pet: userData['pet'] as String? ?? 'cat',
+        language: userData['language'] as String? ?? 'en',
+        serverId: userData['id'] as String? ?? '',
+      );
+      _profile = profile;
+      _isOnboarded = true;
+      _storageService.saveProfile(profile);
+    }
+  }
+
   /// Fetch user profile from server and restore locally
   Future<void> fetchAndRestoreProfile() async {
     try {
       final result = await _authService.getProfile();
       if (result['success'] == true && result['user'] != null) {
-        final userData = result['user'] as Map<String, dynamic>;
-        final name = userData['name'] as String? ?? '';
-        final classLevel = userData['class_level'] as String? ?? '';
-        final avatar = userData['avatar'] as String? ?? 'lion';
-
-        // Always pre-populate onboarding fields from server
-        // so name/avatar aren't blank if user needs to re-onboard
-        if (name.isNotEmpty) _onboardingName = name;
-        if (avatar.isNotEmpty) _onboardingAvatar = avatar;
-
-        // Only fully restore if user has completed onboarding (has classLevel)
-        if (classLevel.isNotEmpty) {
-          _onboardingClassLevel = classLevel;
-          final profile = ChildProfile(
-            name: name,
-            age: userData['age'] as int? ?? 5,
-            classLevel: classLevel,
-            avatar: avatar,
-            pet: userData['pet'] as String? ?? 'cat',
-            language: userData['language'] as String? ?? 'en',
-            serverId: userData['id'] as String? ?? '',
-          );
-          _profile = profile;
-          _isOnboarded = true;
-          await _storageService.saveProfile(profile);
-        }
+        _restoreFromUserData(result['user'] as Map<String, dynamic>);
       }
     } catch (_) {
       // If fetch fails, user will go through onboarding

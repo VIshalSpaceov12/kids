@@ -305,16 +305,14 @@ async function firebaseSync(req, res) {
       updated_at: new Date(),
     });
 
-    const user = await db('users').where({ id }).first();
+    const user = await db('users')
+      .where({ id })
+      .select('id', 'name', 'email', 'phone', 'role', 'age', 'class_level', 'avatar', 'pet', 'language')
+      .first();
 
     return res.status(200).json({
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user,
     });
   } catch (error) {
     console.error('Firebase sync error:', error);

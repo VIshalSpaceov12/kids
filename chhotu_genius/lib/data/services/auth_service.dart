@@ -65,10 +65,12 @@ class AuthService {
         await _api.saveToken(idToken);
       }
 
-      // Sync with backend
+      // Sync with backend — returns full user profile including class_level
       final syncResult = await _api.post('/auth/firebase-sync', {});
       if (syncResult['success'] == true && syncResult['user'] != null) {
-        await _api.saveUserData(syncResult['user'] as Map<String, dynamic>);
+        final user = syncResult['user'] as Map<String, dynamic>;
+        await _api.saveUserData(user);
+        return {'success': true, 'user': user};
       }
 
       return {'success': true};
