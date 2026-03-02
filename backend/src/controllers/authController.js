@@ -10,7 +10,7 @@ const { generateOtp, verifyOtp } = require('../utils/otp');
  */
 async function register(req, res) {
   try {
-    const { phone, email, name } = req.body;
+    const { phone, email, name, password } = req.body;
 
     // Check if parent already exists by phone or email
     let existing = null;
@@ -39,12 +39,19 @@ async function register(req, res) {
       });
     }
 
+    // Hash password if provided
+    let passwordHash = null;
+    if (password) {
+      passwordHash = await bcrypt.hash(password, 10);
+    }
+
     // Create new parent
     const [parent] = await db('parents')
       .insert({
         name,
         phone: phone || null,
         email: email || null,
+        password_hash: passwordHash,
       })
       .returning('*');
 
@@ -232,4 +239,101 @@ async function setPin(req, res) {
   }
 }
 
-module.exports = { register, verifyOtpHandler, refresh, setPin };
+/**
+ * POST /api/auth/login
+ * Authenticate a parent with email and password.
+ */
+async function login(req, res) {
+  try {
+    const { email, password } = req.body;
+
+    // Look up parent by email
+    const parent = await db('parents').where({ email }).first();
+
+    if (!parent || !parent.password_hash) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    // Verify password
+    const isMatch = await bcrypt.compare(password, parent.password_hash);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password.',
+      });
+    }
+
+    // Generate JWT
+    const token = jwt.sign(
+      {
+        id: parent.id,
+        name: parent.name,
+        email: parent.email,
+        phone: parent.phone,
+        type: 'parent',
+      },
+      env.JWT_SECRET,
+      { expiresIn: env.JWT_EXPIRES_IN }
+    );
+
+    return res.status(200).json({
+      success: true,
+      token,
+      parent: {
+        id: parent.id,
+        name: parent.name,
+        email: parent.email,
+        phone: parent.phone,
+      },
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+/**
+ * POST /api/auth/firebase-sync
+ * Sync parent data from Firebase to the local database.
+ * Protected by authenticate middleware (req.user exists).
+ * Updates the parent's name and email from Firebase data.
+ */
+async function firebaseSync(req, res) {
+  try {
+    const { id, firebaseUid } = req.user;
+
+    // Update parent with latest Firebase info
+    await db('parents').where({ id }).update({
+      name: req.user.name,
+      email: req.user.email,
+      firebase_uid: firebaseUid,
+      updated_at: new Date(),
+    });
+
+    const parent = await db('parents').where({ id }).first();
+
+    return res.status(200).json({
+      success: true,
+      parent: {
+        id: parent.id,
+        name: parent.name,
+        email: parent.email,
+      },
+    });
+  } catch (error) {
+    console.error('Firebase sync error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+}
+
+module.exports = { register, verifyOtpHandler, refresh, setPin, login, firebaseSync };

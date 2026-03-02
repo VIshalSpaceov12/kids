@@ -23,6 +23,7 @@ const registerSchema = Joi.object({
   email: Joi.string().email().allow(null, '').optional().messages({
     'string.email': 'Email must be a valid email address',
   }),
+  password: Joi.string().min(6).optional(),
 }).custom((value, helpers) => {
   if (!value.phone && !value.email) {
     return helpers.error('any.custom', { message: 'Either phone or email is required' });
@@ -30,6 +31,17 @@ const registerSchema = Joi.object({
   return value;
 }).messages({
   'any.custom': '{{#message}}',
+});
+
+const loginSchema = Joi.object({
+  email: Joi.string().email().required().messages({
+    'string.email': 'Email must be a valid email address',
+    'any.required': 'Email is required',
+  }),
+  password: Joi.string().min(6).required().messages({
+    'string.min': 'Password must be at least 6 characters',
+    'any.required': 'Password is required',
+  }),
 });
 
 const verifyOtpSchema = Joi.object({
@@ -61,8 +73,10 @@ const setPinSchema = Joi.object({
 
 // Routes
 router.post('/register', validate(registerSchema), authController.register);
+router.post('/login', validate(loginSchema), authController.login);
 router.post('/verify-otp', validate(verifyOtpSchema), authController.verifyOtpHandler);
 router.post('/refresh', validate(refreshSchema), authController.refresh);
 router.post('/set-pin', authenticate, validate(setPinSchema), authController.setPin);
+router.post('/firebase-sync', authenticate, authController.firebaseSync);
 
 module.exports = router;
