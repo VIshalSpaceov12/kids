@@ -7,7 +7,7 @@ import '../../core/config/app_config.dart';
 
 class ApiService {
   static const String _tokenKey = 'auth_token';
-  static const String _parentKey = 'parent_data';
+  static const String _userDataKey = 'user_data';
 
   final http.Client _client;
   final SharedPreferences _prefs;
@@ -25,20 +25,36 @@ class ApiService {
 
   Future<void> clearToken() async {
     await _prefs.remove(_tokenKey);
-    await _prefs.remove(_parentKey);
+    await _prefs.remove(_userDataKey);
   }
 
   bool get isLoggedIn => FirebaseAuth.instance.currentUser != null;
 
-  // Parent data
-  Future<void> saveParentData(Map<String, dynamic> parent) async {
-    await _prefs.setString(_parentKey, jsonEncode(parent));
+  // User data
+  Future<void> saveUserData(Map<String, dynamic> user) async {
+    await _prefs.setString(_userDataKey, jsonEncode(user));
   }
 
-  Map<String, dynamic>? getParentData() {
-    final data = _prefs.getString(_parentKey);
+  Map<String, dynamic>? getUserData() {
+    final data = _prefs.getString(_userDataKey);
     if (data == null) return null;
     return jsonDecode(data) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> put(String path, Map<String, dynamic> body) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client
+          .put(Uri.parse('$baseUrl$path'), headers: headers, body: jsonEncode(body))
+          .timeout(AppConfig.connectTimeout);
+      return _handleResponse(response);
+    } on SocketException {
+      return {'success': false, 'message': 'No internet connection', 'offline': true};
+    } on http.ClientException {
+      return {'success': false, 'message': 'Connection failed', 'offline': true};
+    } catch (e) {
+      return {'success': false, 'message': e.toString()};
+    }
   }
 
   // HTTP helpers

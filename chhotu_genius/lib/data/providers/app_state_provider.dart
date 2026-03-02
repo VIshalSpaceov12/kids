@@ -106,20 +106,26 @@ class AppStateProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetch children from server and restore profile locally
+  /// Fetch user profile from server and restore locally
   Future<void> fetchAndRestoreProfile() async {
     try {
-      final result = await _authService.getChildren();
-      if (result['success'] == true && result['children'] != null) {
-        final children = result['children'] as List<dynamic>;
-        if (children.isNotEmpty) {
-          final childData = children.first as Map<String, dynamic>;
+      final result = await _authService.getProfile();
+      if (result['success'] == true && result['user'] != null) {
+        final userData = result['user'] as Map<String, dynamic>;
+        final name = userData['name'] as String? ?? '';
+        final classLevel = userData['class_level'] as String? ?? '';
+        final avatar = userData['avatar'] as String? ?? 'lion';
+
+        // Only restore if user has completed onboarding (has classLevel set)
+        if (classLevel.isNotEmpty) {
           final profile = ChildProfile(
-            name: childData['name'] as String? ?? '',
-            age: childData['age'] as int? ?? 5,
-            classLevel: childData['classLevel'] as String? ?? 'nursery',
-            avatar: childData['avatar'] as String? ?? 'lion',
-            serverId: childData['id'] as String? ?? '',
+            name: name,
+            age: userData['age'] as int? ?? 5,
+            classLevel: classLevel,
+            avatar: avatar,
+            pet: userData['pet'] as String? ?? 'cat',
+            language: userData['language'] as String? ?? 'en',
+            serverId: userData['id'] as String? ?? '',
           );
           _profile = profile;
           _isOnboarded = true;
@@ -131,7 +137,7 @@ class AppStateProvider extends ChangeNotifier {
     }
   }
 
-  // Complete onboarding and create profile
+  // Complete onboarding - save profile to server and locally
   Future<void> completeOnboarding() async {
     final profile = ChildProfile(
       name: _onboardingName,
@@ -144,17 +150,16 @@ class AppStateProvider extends ChangeNotifier {
     await _storageService.trackActiveDay();
     notifyListeners();
 
-    // If logged in, create child on server and save the server ID
+    // Save to server (PUT /profiles/me)
     if (_isLoggedIn) {
-      final result = await _authService.createChild(
+      final result = await _authService.updateProfile(
         name: _onboardingName,
-        age: profile.age,
         classLevel: _onboardingClassLevel,
         avatar: _onboardingAvatar,
       );
-      if (result['success'] == true && result['child'] != null) {
-        final serverChildId = (result['child'] as Map<String, dynamic>)['id'] as String;
-        _profile = _profile!.copyWith(serverId: serverChildId);
+      if (result['success'] == true && result['user'] != null) {
+        final serverUser = result['user'] as Map<String, dynamic>;
+        _profile = _profile!.copyWith(serverId: serverUser['id'] as String? ?? '');
         await _storageService.saveProfile(_profile!);
         notifyListeners();
       }
@@ -167,6 +172,11 @@ class AppStateProvider extends ChangeNotifier {
       _profile = _profile!.copyWith(classLevel: classLevel);
       await _storageService.saveProfile(_profile!);
       notifyListeners();
+
+      // Sync to server
+      if (_isLoggedIn) {
+        await _authService.updateProfile(classLevel: classLevel);
+      }
     }
   }
 

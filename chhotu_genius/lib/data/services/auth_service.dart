@@ -7,9 +7,9 @@ class AuthService {
   AuthService(this._api);
 
   bool get isLoggedIn => FirebaseAuth.instance.currentUser != null;
-  Map<String, dynamic>? get parentData => _api.getParentData();
+  Map<String, dynamic>? get userData => _api.getUserData();
 
-  /// Register a new parent with name, email, and password
+  /// Register a new user with name, email, and password
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -32,10 +32,10 @@ class AuthService {
         await _api.saveToken(idToken);
       }
 
-      // Sync with backend and save parent data
+      // Sync with backend - creates user in DB
       final syncResult = await _api.post('/auth/firebase-sync', {});
-      if (syncResult['success'] == true && syncResult['parent'] != null) {
-        await _api.saveParentData(syncResult['parent'] as Map<String, dynamic>);
+      if (syncResult['success'] == true && syncResult['user'] != null) {
+        await _api.saveUserData(syncResult['user'] as Map<String, dynamic>);
       }
 
       return {'success': true};
@@ -65,10 +65,10 @@ class AuthService {
         await _api.saveToken(idToken);
       }
 
-      // Sync with backend and save parent data
+      // Sync with backend
       final syncResult = await _api.post('/auth/firebase-sync', {});
-      if (syncResult['success'] == true && syncResult['parent'] != null) {
-        await _api.saveParentData(syncResult['parent'] as Map<String, dynamic>);
+      if (syncResult['success'] == true && syncResult['user'] != null) {
+        await _api.saveUserData(syncResult['user'] as Map<String, dynamic>);
       }
 
       return {'success': true};
@@ -85,29 +85,29 @@ class AuthService {
     await _api.clearToken();
   }
 
-  /// Get current parent profile
+  /// Get current user profile from server
   Future<Map<String, dynamic>> getProfile() async {
     return _api.get('/profiles/me');
   }
 
-  /// Create a child profile on the server
-  Future<Map<String, dynamic>> createChild({
-    required String name,
-    required int age,
-    required String classLevel,
-    required String avatar,
+  /// Update user profile on server (name, classLevel, avatar, age, etc.)
+  Future<Map<String, dynamic>> updateProfile({
+    String? name,
+    String? classLevel,
+    String? avatar,
+    int? age,
+    String? pet,
+    String? language,
   }) async {
-    return _api.post('/profiles/children', {
-      'name': name,
-      'age': age,
-      'classLevel': classLevel,
-      'avatar': avatar,
-    });
-  }
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (classLevel != null) body['classLevel'] = classLevel;
+    if (avatar != null) body['avatar'] = avatar;
+    if (age != null) body['age'] = age;
+    if (pet != null) body['pet'] = pet;
+    if (language != null) body['language'] = language;
 
-  /// Get children profiles for the current parent
-  Future<Map<String, dynamic>> getChildren() async {
-    return _api.get('/profiles/children');
+    return _api.put('/profiles/me', body);
   }
 
   /// Map Firebase Auth error codes to user-friendly messages
