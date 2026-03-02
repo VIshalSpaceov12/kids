@@ -1,5 +1,6 @@
 .DS_Store
 *.log
+.env
 .claude/
 node_modules/
 .dart_tool/
@@ -11,3 +12,4 @@ build/
 *.iml
 .idea/
 .vscode/
+firebase-service-account.json
