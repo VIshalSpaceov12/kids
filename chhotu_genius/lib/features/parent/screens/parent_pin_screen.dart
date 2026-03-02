@@ -73,7 +73,7 @@ class _ParentPinScreenState extends State<ParentPinScreen> {
   void _verifyConfirmation() {
     if (_pin == _confirmPin) {
       context.read<AppStateProvider>().saveParentPin(_pin);
-      context.go('/parent/dashboard');
+      context.push('/parent/dashboard');
     } else {
       setState(() {
         _errorMessage = 'PINs do not match. Try again.';
@@ -88,7 +88,7 @@ class _ParentPinScreenState extends State<ParentPinScreen> {
     final appState = context.read<AppStateProvider>();
     final savedPin = appState.getParentPin();
     if (_pin == savedPin) {
-      context.go('/parent/dashboard');
+      context.push('/parent/dashboard');
     } else {
       setState(() {
         _errorMessage = 'Wrong PIN. Try again.';
@@ -121,7 +121,7 @@ class _ParentPinScreenState extends State<ParentPinScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => context.go('/home'),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded, size: 28),
         ),
         title: Text(
@@ -204,6 +204,15 @@ class _ParentPinScreenState extends State<ParentPinScreen> {
                     fontSize: 16,
                     color: AppColors.wrongRed,
                     fontWeight: FontWeight.bold,
+                  ),
+                ),
+              if (!context.read<AppStateProvider>().isLoggedIn)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: TextButton.icon(
+                    onPressed: () => context.go('/parent/login'),
+                    icon: const Icon(Icons.cloud_sync),
+                    label: const Text('Login to sync progress across devices'),
                   ),
                 ),
               const Spacer(),

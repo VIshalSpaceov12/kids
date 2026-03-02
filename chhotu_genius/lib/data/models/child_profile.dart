@@ -8,6 +8,7 @@ class ChildProfile {
   final String pet;
   final String language;
   final String parentPin;
+  final String serverId; // Server-side child UUID for API calls
 
   ChildProfile({
     required this.name,
@@ -17,6 +18,7 @@ class ChildProfile {
     this.pet = '',
     this.language = 'en',
     this.parentPin = '',
+    this.serverId = '',
   });
 
   ChildProfile copyWith({
@@ -27,6 +29,7 @@ class ChildProfile {
     String? pet,
     String? language,
     String? parentPin,
+    String? serverId,
   }) {
     return ChildProfile(
       name: name ?? this.name,
@@ -36,6 +39,7 @@ class ChildProfile {
       pet: pet ?? this.pet,
       language: language ?? this.language,
       parentPin: parentPin ?? this.parentPin,
+      serverId: serverId ?? this.serverId,
     );
   }
 
@@ -48,6 +52,7 @@ class ChildProfile {
       'pet': pet,
       'language': language,
       'parentPin': parentPin,
+      'serverId': serverId,
     };
   }
 
@@ -60,6 +65,7 @@ class ChildProfile {
       pet: json['pet'] as String? ?? '',
       language: json['language'] as String? ?? 'en',
       parentPin: json['parentPin'] as String? ?? '',
+      serverId: json['serverId'] as String? ?? '',
     );
   }
 

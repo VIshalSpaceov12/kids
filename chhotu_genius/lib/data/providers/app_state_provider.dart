@@ -62,6 +62,7 @@ class AppStateProvider extends ChangeNotifier {
     if (result['success'] == true) {
       _isLoggedIn = true;
       _authError = null;
+      await fetchAndRestoreProfile();
       notifyListeners();
       return true;
     } else {
@@ -82,6 +83,7 @@ class AppStateProvider extends ChangeNotifier {
     );
     if (result['success'] == true) {
       _isLoggedIn = true;
+      _onboardingName = name;
       _authError = null;
       notifyListeners();
       return true;
@@ -95,7 +97,38 @@ class AppStateProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _authService.logout();
     _isLoggedIn = false;
+    _isOnboarded = false;
+    _profile = null;
+    _onboardingName = '';
+    _onboardingClassLevel = '';
+    _onboardingAvatar = '';
+    await _storageService.clearOnboarded();
     notifyListeners();
+  }
+
+  /// Fetch children from server and restore profile locally
+  Future<void> fetchAndRestoreProfile() async {
+    try {
+      final result = await _authService.getChildren();
+      if (result['success'] == true && result['children'] != null) {
+        final children = result['children'] as List<dynamic>;
+        if (children.isNotEmpty) {
+          final childData = children.first as Map<String, dynamic>;
+          final profile = ChildProfile(
+            name: childData['name'] as String? ?? '',
+            age: childData['age'] as int? ?? 5,
+            classLevel: childData['classLevel'] as String? ?? 'nursery',
+            avatar: childData['avatar'] as String? ?? 'lion',
+            serverId: childData['id'] as String? ?? '',
+          );
+          _profile = profile;
+          _isOnboarded = true;
+          await _storageService.saveProfile(profile);
+        }
+      }
+    } catch (_) {
+      // If fetch fails, user will go through onboarding
+    }
   }
 
   // Complete onboarding and create profile
@@ -125,6 +158,15 @@ class AppStateProvider extends ChangeNotifier {
         await _storageService.saveProfile(_profile!);
         notifyListeners();
       }
+    }
+  }
+
+  // Update class level on existing profile
+  Future<void> updateClassLevel(String classLevel) async {
+    if (_profile != null) {
+      _profile = _profile!.copyWith(classLevel: classLevel);
+      await _storageService.saveProfile(_profile!);
+      notifyListeners();
     }
   }
 

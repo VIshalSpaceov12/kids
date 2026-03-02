@@ -105,6 +105,11 @@ class AuthService {
     });
   }
 
+  /// Get children profiles for the current parent
+  Future<Map<String, dynamic>> getChildren() async {
+    return _api.get('/profiles/children');
+  }
+
   /// Map Firebase Auth error codes to user-friendly messages
   String _mapFirebaseError(String code) {
     switch (code) {

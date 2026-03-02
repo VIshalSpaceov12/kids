@@ -36,8 +36,15 @@ class _ClassSelectScreenState extends State<ClassSelectScreen> {
 
   void _onNext() {
     if (_selectedClass != null) {
-      context.read<AppStateProvider>().setOnboardingClassLevel(_selectedClass!);
-      context.go('/onboarding/avatar');
+      final appState = context.read<AppStateProvider>();
+      if (appState.isOnboarded) {
+        // Already onboarded — just update class level and go home
+        appState.updateClassLevel(_selectedClass!);
+        context.go('/home');
+      } else {
+        appState.setOnboardingClassLevel(_selectedClass!);
+        context.go('/onboarding/avatar');
+      }
     }
   }
 

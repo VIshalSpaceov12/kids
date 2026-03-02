@@ -14,7 +14,7 @@ class AbcForestScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => context.go('/home'),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded, size: 28),
         ),
         title: Text(

@@ -50,11 +50,11 @@ class ParentDashboardScreen extends StatelessWidget {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => context.go('/home'),
+          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded, size: 28),
         ),
         title: Text(
-          'Parent Dashboard',
+          'Profile',
           style: GoogleFonts.balooTamma2(
             fontSize: 24,
             fontWeight: FontWeight.bold,
@@ -152,14 +152,14 @@ class ParentDashboardScreen extends StatelessWidget {
                   label: 'Total Stars',
                   color: AppColors.starGold,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _StatCard(
                   emoji: '\u{1F4DA}',
                   value: '$completedLessons',
                   label: 'Lessons Done',
                   color: AppColors.primaryGreen,
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 8),
                 _StatCard(
                   emoji: '\u{1F4C5}',
                   value: '$daysActive',
@@ -224,14 +224,157 @@ class ParentDashboardScreen extends StatelessWidget {
                 stars: progressProvider.getModuleStars('animals_birds'),
               ),
             ],
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
+            // Change class option
+            GestureDetector(
+              onTap: () => context.push('/onboarding/class'),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.cardWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(13),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryOrange.withAlpha(38),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Text('\u{1F3EB}',
+                            style: TextStyle(fontSize: 24)),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Change Class',
+                            style: GoogleFonts.balooTamma2(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          Text(
+                            'Currently in ${classLevel.name}',
+                            style: GoogleFonts.balooTamma2(
+                              fontSize: 13,
+                              color: AppColors.textLight,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(
+                      Icons.chevron_right_rounded,
+                      color: AppColors.textLight,
+                      size: 28,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Cloud sync status
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.cardWhite,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: appState.isLoggedIn
+                      ? AppColors.correctGreen.withAlpha(77)
+                      : Colors.grey.withAlpha(51),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    appState.isLoggedIn ? Icons.cloud_done : Icons.cloud_off,
+                    color: appState.isLoggedIn
+                        ? AppColors.correctGreen
+                        : Colors.grey,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          appState.isLoggedIn
+                              ? 'Cloud Sync Active'
+                              : 'Offline Mode',
+                          style: GoogleFonts.balooTamma2(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        Text(
+                          appState.isLoggedIn
+                              ? 'Progress is syncing to server'
+                              : 'Login to sync progress across devices',
+                          style: GoogleFonts.balooTamma2(
+                            fontSize: 12,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (appState.isLoggedIn)
+                    TextButton(
+                      onPressed: () async {
+                        await appState.logout();
+                      },
+                      child: Text(
+                        'Logout',
+                        style: GoogleFonts.balooTamma2(
+                          fontSize: 14,
+                          color: AppColors.wrongRed,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  else
+                    TextButton(
+                      onPressed: () => context.go('/parent/login'),
+                      child: Text(
+                        'Login',
+                        style: GoogleFonts.balooTamma2(
+                          fontSize: 14,
+                          color: AppColors.primaryBlue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             // Back button
             Center(
               child: SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () => context.go('/home'),
+                  onPressed: () => context.pop(),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
                     foregroundColor: Colors.white,
@@ -274,7 +417,7 @@ class _StatCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
         decoration: BoxDecoration(
           color: AppColors.cardWhite,
           borderRadius: BorderRadius.circular(16),
@@ -288,12 +431,12 @@ class _StatCard extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(emoji, style: const TextStyle(fontSize: 28)),
+            Text(emoji, style: const TextStyle(fontSize: 24)),
             const SizedBox(height: 4),
             Text(
               value,
               style: GoogleFonts.balooTamma2(
-                fontSize: 24,
+                fontSize: 20,
                 fontWeight: FontWeight.bold,
                 color: color,
               ),
@@ -305,6 +448,7 @@ class _StatCard extends StatelessWidget {
                 color: AppColors.textLight,
               ),
               textAlign: TextAlign.center,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

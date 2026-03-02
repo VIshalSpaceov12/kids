@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 
 import 'core/theme/app_theme.dart';
 import 'data/providers/app_state_provider.dart';
-import 'features/onboarding/screens/welcome_screen.dart';
-import 'features/onboarding/screens/name_input_screen.dart';
 import 'features/onboarding/screens/class_select_screen.dart';
 import 'features/onboarding/screens/avatar_select_screen.dart';
 import 'features/home/screens/world_map_screen.dart';
@@ -28,7 +26,7 @@ import 'features/maths_kingdom/screens/division_screen.dart';
 import 'features/animals_birds/screens/animals_birds_screen.dart';
 import 'features/animals_birds/screens/animal_learning_screen.dart';
 import 'features/animals_birds/screens/animal_identify_screen.dart';
-import 'features/parent/screens/parent_pin_screen.dart';
+import 'features/parent/screens/parent_login_screen.dart';
 import 'features/parent/screens/parent_dashboard_screen.dart';
 
 class ChhotuGeniusApp extends StatefulWidget {
@@ -44,35 +42,46 @@ class _ChhotuGeniusAppState extends State<ChhotuGeniusApp> {
   GoRouter _getRouter(AppStateProvider appState) {
     if (_router != null) return _router!;
 
+    final String initialLocation;
+    if (!appState.isLoggedIn) {
+      initialLocation = '/auth';
+    } else if (!appState.isOnboarded) {
+      initialLocation = '/onboarding/class';
+    } else {
+      initialLocation = '/home';
+    }
+
     _router = GoRouter(
-      initialLocation: appState.isOnboarded ? '/home' : '/welcome',
+      initialLocation: initialLocation,
       refreshListenable: appState,
       redirect: (context, state) {
+        final isLoggedIn = appState.isLoggedIn;
         final isOnboarded = appState.isOnboarded;
-        final isOnboardingRoute =
-            state.matchedLocation.startsWith('/onboarding') ||
-                state.matchedLocation == '/welcome';
+        final location = state.matchedLocation;
+        final isAuthRoute = location == '/auth';
+        final isOnboardingRoute = location.startsWith('/onboarding');
 
-        // After onboarding completes, redirect to home
-        if (isOnboarded && isOnboardingRoute) {
-          return '/home';
+        // Not logged in → force /auth
+        if (!isLoggedIn) {
+          return isAuthRoute ? null : '/auth';
         }
-        // If not onboarded and trying to access non-onboarding routes
-        if (!isOnboarded &&
-            !isOnboardingRoute &&
-            state.matchedLocation != '/welcome') {
-          return '/welcome';
+
+        // Logged in but not onboarded → allow onboarding routes only
+        if (!isOnboarded) {
+          if (isOnboardingRoute) return null;
+          if (isAuthRoute) return '/onboarding/class';
+          return '/onboarding/class';
         }
+
+        // Logged in & onboarded → block /auth, allow everything else
+        if (isAuthRoute) return '/home';
         return null;
       },
       routes: [
         GoRoute(
-          path: '/welcome',
-          builder: (context, state) => const WelcomeScreen(),
-        ),
-        GoRoute(
-          path: '/onboarding/name',
-          builder: (context, state) => const NameInputScreen(),
+          path: '/auth',
+          builder: (context, state) =>
+              const ParentLoginScreen(isInitialAuth: true),
         ),
         GoRoute(
           path: '/onboarding/class',
@@ -163,8 +172,9 @@ class _ChhotuGeniusAppState extends State<ChhotuGeniusApp> {
           builder: (context, state) => const AnimalIdentifyScreen(),
         ),
         GoRoute(
-          path: '/parent',
-          builder: (context, state) => const ParentPinScreen(),
+          path: '/parent/login',
+          builder: (context, state) =>
+              const ParentLoginScreen(isInitialAuth: false),
         ),
         GoRoute(
           path: '/parent/dashboard',

@@ -35,22 +35,25 @@ class WorldMapScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               child: Row(
                 children: [
-                  // Avatar circle
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryBlue.withAlpha(51),
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: AppColors.primaryBlue,
-                        width: 2,
+                  // Avatar circle (tappable → profile)
+                  GestureDetector(
+                    onTap: () => context.push('/parent/dashboard'),
+                    child: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue.withAlpha(51),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: AppColors.primaryBlue,
+                          width: 2,
+                        ),
                       ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        avatar.emoji,
-                        style: const TextStyle(fontSize: 28),
+                      child: Center(
+                        child: Text(
+                          avatar.emoji,
+                          style: const TextStyle(fontSize: 28),
+                        ),
                       ),
                     ),
                   ),
@@ -85,31 +88,6 @@ class WorldMapScreen extends StatelessWidget {
                           ],
                         ),
                       ],
-                    ),
-                  ),
-                  // Parent lock button
-                  GestureDetector(
-                    onTap: () => context.push('/parent'),
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(26),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: const Center(
-                        child: Text(
-                          '\u{1F512}',
-                          style: TextStyle(fontSize: 24),
-                        ),
-                      ),
                     ),
                   ),
                 ],

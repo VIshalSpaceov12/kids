@@ -93,4 +93,10 @@ class LocalStorageService {
   int getDaysActive() {
     return _prefs.getInt(_daysActiveKey) ?? 1;
   }
+
+  /// Clear onboarded state and profile (used on logout)
+  Future<void> clearOnboarded() async {
+    await _prefs.remove(_onboardedKey);
+    await _prefs.remove(_profileKey);
+  }
 }

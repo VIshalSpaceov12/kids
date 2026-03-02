@@ -1,13 +1,17 @@
 import 'package:flutter/foundation.dart';
 import '../local/local_storage_service.dart';
+import '../services/api_service.dart';
+import '../services/progress_sync_service.dart';
 
 class ProgressProvider extends ChangeNotifier {
   final LocalStorageService _storageService;
+  final ProgressSyncService _syncService;
+  final ApiService _apiService;
 
   // module -> lesson -> score (stars 0-3)
   Map<String, Map<String, int>> _progress = {};
 
-  ProgressProvider(this._storageService) {
+  ProgressProvider(this._storageService, this._syncService, this._apiService) {
     _loadFromStorage();
   }
 
@@ -27,6 +31,25 @@ class ProgressProvider extends ChangeNotifier {
     }
     await _storageService.saveProgress(_progress);
     notifyListeners();
+  }
+
+  /// Sync a specific progress entry to the server (if logged in and childId is available)
+  Future<void> syncProgressToServer({
+    required String childId,
+    required String lessonId,
+    required int score,
+    required int stars,
+    bool completed = false,
+  }) async {
+    if (!_apiService.isLoggedIn || childId.isEmpty || lessonId.isEmpty) return;
+    // Fire and forget - don't block UI
+    _syncService.saveProgress(
+      childId: childId,
+      lessonId: lessonId,
+      score: score,
+      stars: stars,
+      completed: completed,
+    );
   }
 
   Map<String, int> getModuleProgress(String module) {
