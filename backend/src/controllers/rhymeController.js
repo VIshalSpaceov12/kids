@@ -1,15 +1,13 @@
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-
-const execFileAsync = promisify(execFile);
+const youtubedl = require('youtube-dl-exec');
 
 // Cache audio URLs for 1 hour (YouTube URLs expire after ~6 hours)
 const urlCache = new Map();
-const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const CACHE_TTL = 60 * 60 * 1000;
 
 /**
  * GET /api/rhymes/audio-url/:videoId
- * Extract audio-only stream URL from a YouTube video using yt-dlp.
+ * Extract audio-only stream URL from a YouTube video.
+ * Uses youtube-dl-exec which bundles yt-dlp binary (works on Render).
  */
 async function getAudioUrl(req, res) {
   try {
@@ -31,29 +29,35 @@ async function getAudioUrl(req, res) {
       });
     }
 
-    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    const { stdout } = await execFileAsync('yt-dlp', [
-      '-f', 'bestaudio',
-      '-g',
-      '--no-warnings',
-      ytUrl,
-    ], { timeout: 30000 });
+    const url = `https://www.youtube.com/watch?v=${videoId}`;
+    const output = await youtubedl(url, {
+      dumpSingleJson: true,
+      noCheckCertificates: true,
+      noWarnings: true,
+      preferFreeFormats: true,
+    });
 
-    const audioUrl = stdout.trim();
+    // Get audio-only formats that have a URL
+    const audioFormats = output.formats.filter(
+      (f) => f.resolution === 'audio only' && f.url
+    );
 
-    if (!audioUrl) {
+    if (!audioFormats.length) {
       return res.status(404).json({
         success: false,
-        message: 'No audio stream found',
+        message: 'No audio streams found',
       });
     }
 
-    // Cache the result
-    urlCache.set(videoId, { url: audioUrl, timestamp: Date.now() });
+    // Pick highest quality (last in the sorted list)
+    const best = audioFormats[audioFormats.length - 1];
+
+    // Cache it
+    urlCache.set(videoId, { url: best.url, timestamp: Date.now() });
 
     return res.status(200).json({
       success: true,
-      audioUrl,
+      audioUrl: best.url,
     });
   } catch (error) {
     console.error('Audio URL extraction error:', error.message);

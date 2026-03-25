@@ -11,7 +11,7 @@ class YouTubeAudioService {
       print('[YouTubeAudio] Requesting audio URL for: $videoId');
       final response = await http
           .get(Uri.parse('${AppConfig.baseUrl}/rhymes/audio-url/$videoId'))
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 45));
 
       if (response.statusCode != 200) {
         print('[YouTubeAudio] Server returned ${response.statusCode}');
@@ -33,7 +33,5 @@ class YouTubeAudioService {
     }
   }
 
-  void dispose() {
-    // No resources to clean up with HTTP approach
-  }
+  void dispose() {}
 }

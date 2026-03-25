@@ -124,7 +124,8 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     }
 
     try {
-      print('[RhymePlayer] Setting audio URL: ${url.toString().substring(0, 80)}...');
+      final urlStr = url.toString();
+      print('[RhymePlayer] Setting audio URL: ${urlStr.length > 80 ? urlStr.substring(0, 80) : urlStr}...');
       await _audioPlayer.setUrl(url.toString());
       _audioPlayer.play();
     } catch (e) {
