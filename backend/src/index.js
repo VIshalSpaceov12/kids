@@ -74,6 +74,7 @@ app.use('/api/content', contentRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/admin', adminRoutes);
 app.get('/api/rhymes/audio-url/:videoId', rhymeController.getAudioUrl);
+app.get('/api/rhymes/audio-stream/:videoId', rhymeController.streamAudio);
 
 // ---------------------
 // 404 Handler
