@@ -16,6 +16,8 @@ dependencies:
   hive_flutter: ^1.1.0
   google_fonts: ^6.2.0
   audioplayers: ^6.0.0
+  just_audio: ^0.9.40
+  youtube_explode_dart: ^2.3.5
   flutter_svg: ^2.0.0
   lottie: ^3.0.0
   shared_preferences: ^2.2.0
