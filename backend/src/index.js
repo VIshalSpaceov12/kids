@@ -10,6 +10,7 @@ const profileRoutes = require('./routes/profiles');
 const contentRoutes = require('./routes/content');
 const progressRoutes = require('./routes/progress');
 const adminRoutes = require('./routes/admin');
+const rhymeController = require('./controllers/rhymeController');
 
 const app = express();
 
@@ -72,6 +73,7 @@ app.use('/api/profiles', profileRoutes);
 app.use('/api/content', contentRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/admin', adminRoutes);
+app.get('/api/rhymes/audio-url/:videoId', rhymeController.getAudioUrl);
 
 // ---------------------
 // 404 Handler

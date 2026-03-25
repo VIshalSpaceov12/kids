@@ -110,10 +110,12 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
       _currentLineIndex = -1;
     });
 
+    print('[RhymePlayer] Loading audio for video: $videoId');
     final url = await _ytService.getAudioUrl(videoId);
     if (!mounted) return;
 
     if (url == null) {
+      print('[RhymePlayer] Failed to get audio URL for: $videoId');
       setState(() {
         _hasError = true;
         _isLoading = false;
@@ -122,9 +124,11 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     }
 
     try {
+      print('[RhymePlayer] Setting audio URL: ${url.toString().substring(0, 80)}...');
       await _audioPlayer.setUrl(url.toString());
       _audioPlayer.play();
-    } catch (_) {
+    } catch (e) {
+      print('[RhymePlayer] Audio playback error: $e');
       if (!mounted) return;
       setState(() {
         _hasError = true;
