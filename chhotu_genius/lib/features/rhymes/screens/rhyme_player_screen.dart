@@ -276,6 +276,7 @@ class _RhymePage extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final String statusText;
 
+  // ignore: prefer_const_constructors_in_immutables
   _RhymePage({
     super.key,
     required this.rhyme,
