@@ -21,7 +21,7 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
   late AudioPlayer _audioPlayer;
   late YouTubeAudioService _ytService;
   late PageController _pageController;
-  late ScrollController _scrollController;
+  final Map<int, ScrollController> _scrollControllers = {};
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
 
@@ -48,7 +48,6 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     super.initState();
     _currentIndex = widget.rhymeIndex;
     _pageController = PageController(initialPage: _currentIndex);
-    _scrollController = ScrollController();
     _audioPlayer = AudioPlayer();
     _ytService = YouTubeAudioService();
 
@@ -97,7 +96,9 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     _audioPlayer.dispose();
     _ytService.dispose();
     _pageController.dispose();
-    _scrollController.dispose();
+    for (final sc in _scrollControllers.values) {
+      sc.dispose();
+    }
     _pulseController.dispose();
     super.dispose();
   }
@@ -162,13 +163,18 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     }
   }
 
+  ScrollController _getScrollController(int index) {
+    return _scrollControllers.putIfAbsent(index, () => ScrollController());
+  }
+
   void _scrollToLine(int index) {
-    if (!_scrollController.hasClients) return;
+    final sc = _scrollControllers[_currentIndex];
+    if (sc == null || !sc.hasClients) return;
     final target = (index * 48.0 - 80).clamp(
       0.0,
-      _scrollController.position.maxScrollExtent,
+      sc.position.maxScrollExtent,
     );
-    _scrollController.animateTo(
+    sc.animateTo(
       target,
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
@@ -236,6 +242,7 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
           final color = _getColor(index);
           final isActive = index == _currentIndex;
           return _RhymePage(
+            key: ValueKey(index),
             rhyme: rhyme,
             color: color,
             isLoading: _isLoading && isActive,
@@ -243,7 +250,7 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
             currentLineIndex: isActive ? _currentLineIndex : -1,
             audioPlayer: _audioPlayer,
             pulseAnim: _pulseAnim,
-            scrollController: _scrollController,
+            scrollController: _getScrollController(index),
             isPlaying: isActive && _audioPlayer.playing,
             onTogglePlayPause: _togglePlayPause,
             formatDuration: _formatDuration,
@@ -270,6 +277,7 @@ class _RhymePage extends StatelessWidget {
   final String statusText;
 
   _RhymePage({
+    super.key,
     required this.rhyme,
     required this.color,
     required this.isLoading,
@@ -523,7 +531,7 @@ class _RhymePage extends StatelessWidget {
       return const Icon(Icons.refresh, color: Colors.white, size: 40);
     }
     if (isPlaying) {
-      return const Icon(Icons.stop_rounded, color: Colors.white, size: 40);
+      return const Icon(Icons.pause_rounded, color: Colors.white, size: 40);
     }
     return const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40);
   }
