@@ -243,7 +243,7 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
             currentLineIndex: isActive ? _currentLineIndex : -1,
             audioPlayer: _audioPlayer,
             pulseAnim: _pulseAnim,
-            scrollController: isActive ? _scrollController : ScrollController(),
+            scrollController: _scrollController,
             isPlaying: isActive && _audioPlayer.playing,
             onTogglePlayPause: _togglePlayPause,
             formatDuration: _formatDuration,
@@ -269,7 +269,7 @@ class _RhymePage extends StatelessWidget {
   final String Function(Duration) formatDuration;
   final String statusText;
 
-  const _RhymePage({
+  _RhymePage({
     required this.rhyme,
     required this.color,
     required this.isLoading,
