@@ -1,11 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../data/rhymes_data.dart';
-import '../services/youtube_audio_service.dart';
 
 class RhymePlayerScreen extends StatefulWidget {
   final int rhymeIndex;
@@ -18,20 +15,12 @@ class RhymePlayerScreen extends StatefulWidget {
 
 class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     with SingleTickerProviderStateMixin {
-  late AudioPlayer _audioPlayer;
-  late YouTubeAudioService _ytService;
+  late FlutterTts _tts;
   late PageController _pageController;
-  final Map<int, ScrollController> _scrollControllers = {};
+  late int _currentIndex;
+  bool _isSpeaking = false;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnim;
-
-  late int _currentIndex;
-  int _currentLineIndex = -1;
-  bool _isLoading = false;
-  bool _hasError = false;
-
-  StreamSubscription<Duration>? _positionSub;
-  StreamSubscription<PlayerState>? _stateSub;
 
   static const List<Color> _colors = [
     Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF3F51B5),
@@ -48,8 +37,22 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     super.initState();
     _currentIndex = widget.rhymeIndex;
     _pageController = PageController(initialPage: _currentIndex);
-    _audioPlayer = AudioPlayer();
-    _ytService = YouTubeAudioService();
+    _tts = FlutterTts();
+    _tts.setLanguage('en-US');
+    _tts.setSpeechRate(0.35);
+    _tts.setPitch(1.2);
+
+    _tts.setCompletionHandler(() {
+      if (mounted) {
+        setState(() => _isSpeaking = false);
+      }
+    });
+
+    _tts.setCancelHandler(() {
+      if (mounted) {
+        setState(() => _isSpeaking = false);
+      }
+    });
 
     _pulseController = AnimationController(
       vsync: this,
@@ -59,152 +62,27 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
     _pulseAnim = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
-
-    _positionSub = _audioPlayer.positionStream.listen((position) {
-      if (!mounted) return;
-      final rhyme = RhymesData.rhymes[_currentIndex];
-      final currentSeconds = position.inMilliseconds / 1000.0;
-      int newIndex = -1;
-      for (int i = rhyme.lines.length - 1; i >= 0; i--) {
-        if (rhyme.lines[i].startTime <= currentSeconds) {
-          newIndex = i;
-          break;
-        }
-      }
-      if (newIndex != _currentLineIndex) {
-        setState(() => _currentLineIndex = newIndex);
-        if (newIndex >= 0) {
-          _scrollToLine(newIndex);
-        }
-      }
-    });
-
-    _stateSub = _audioPlayer.playerStateStream.listen((state) {
-      if (!mounted) return;
-      if (state.processingState == ProcessingState.completed) {
-        setState(() => _currentLineIndex = -1);
-      }
-      // Trigger rebuild for play/pause state changes
-      setState(() {});
-    });
   }
 
   @override
   void dispose() {
-    _positionSub?.cancel();
-    _stateSub?.cancel();
-    _audioPlayer.dispose();
-    _ytService.dispose();
+    _tts.stop();
     _pageController.dispose();
-    for (final sc in _scrollControllers.values) {
-      sc.dispose();
-    }
     _pulseController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadAndPlay(String videoId) async {
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-      _currentLineIndex = -1;
-    });
-
-    print('[RhymePlayer] Loading audio for video: $videoId');
-    final url = await _ytService.getAudioUrl(videoId);
-    if (!mounted) return;
-
-    if (url == null) {
-      print('[RhymePlayer] Failed to get audio URL for: $videoId');
-      setState(() {
-        _hasError = true;
-        _isLoading = false;
-      });
+  Future<void> _speak(String text) async {
+    if (_isSpeaking) {
+      await _tts.stop();
+      setState(() => _isSpeaking = false);
       return;
     }
-
-    try {
-      final urlStr = url.toString();
-      print('[RhymePlayer] Setting audio URL: ${urlStr.length > 80 ? urlStr.substring(0, 80) : urlStr}...');
-      await _audioPlayer.setUrl(url.toString());
-      _audioPlayer.play();
-    } catch (e) {
-      print('[RhymePlayer] Audio playback error: $e');
-      if (!mounted) return;
-      setState(() {
-        _hasError = true;
-        _isLoading = false;
-      });
-      return;
-    }
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  void _togglePlayPause() {
-    if (_isLoading) return;
-
-    final rhyme = RhymesData.rhymes[_currentIndex];
-
-    if (_hasError) {
-      _loadAndPlay(rhyme.youtubeVideoId);
-      return;
-    }
-
-    // If no source loaded yet, or player completed, load and play
-    final state = _audioPlayer.playerState;
-    if (state.processingState == ProcessingState.idle ||
-        state.processingState == ProcessingState.completed) {
-      _loadAndPlay(rhyme.youtubeVideoId);
-      return;
-    }
-
-    if (_audioPlayer.playing) {
-      _audioPlayer.pause();
-    } else {
-      _audioPlayer.play();
-    }
-  }
-
-  ScrollController _getScrollController(int index) {
-    return _scrollControllers.putIfAbsent(index, () => ScrollController());
-  }
-
-  void _scrollToLine(int index) {
-    final sc = _scrollControllers[_currentIndex];
-    if (sc == null || !sc.hasClients) return;
-    final target = (index * 48.0 - 80).clamp(
-      0.0,
-      sc.position.maxScrollExtent,
-    );
-    sc.animateTo(
-      target,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    setState(() => _isSpeaking = true);
+    await _tts.speak(text);
   }
 
   Color _getColor(int index) => _colors[index % _colors.length];
-
-  String _formatDuration(Duration d) {
-    final minutes = d.inMinutes;
-    final seconds = d.inSeconds % 60;
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
-
-  String _statusText() {
-    if (_isLoading) return 'Loading...';
-    if (_hasError) return "Can't play - tap to retry";
-    final state = _audioPlayer.playerState;
-    if (state.processingState == ProcessingState.idle ||
-        state.processingState == ProcessingState.completed) {
-      return 'Tap to play';
-    }
-    if (_audioPlayer.playing) return 'Playing...';
-    return 'Paused';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -215,7 +93,7 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
         elevation: 0,
         leading: IconButton(
           onPressed: () {
-            _audioPlayer.stop();
+            _tts.stop();
             Navigator.of(context).pop();
           },
           icon: const Icon(Icons.arrow_back_rounded, size: 28),
@@ -234,32 +112,21 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
         controller: _pageController,
         itemCount: RhymesData.rhymes.length,
         onPageChanged: (index) {
-          _audioPlayer.stop();
+          _tts.stop();
           setState(() {
             _currentIndex = index;
-            _currentLineIndex = -1;
-            _isLoading = false;
-            _hasError = false;
+            _isSpeaking = false;
           });
         },
         itemBuilder: (context, index) {
           final rhyme = RhymesData.rhymes[index];
           final color = _getColor(index);
-          final isActive = index == _currentIndex;
           return _RhymePage(
-            key: ValueKey(index),
             rhyme: rhyme,
             color: color,
-            isLoading: _isLoading && isActive,
-            hasError: _hasError && isActive,
-            currentLineIndex: isActive ? _currentLineIndex : -1,
-            audioPlayer: _audioPlayer,
+            isSpeaking: _isSpeaking && index == _currentIndex,
             pulseAnim: _pulseAnim,
-            scrollController: _getScrollController(index),
-            isPlaying: isActive && _audioPlayer.playing,
-            onTogglePlayPause: _togglePlayPause,
-            formatDuration: _formatDuration,
-            statusText: isActive ? _statusText() : 'Tap to play',
+            onPlay: () => _speak(rhyme.lyrics),
           );
         },
       ),
@@ -270,32 +137,16 @@ class _RhymePlayerScreenState extends State<RhymePlayerScreen>
 class _RhymePage extends StatelessWidget {
   final RhymeItem rhyme;
   final Color color;
-  final bool isLoading;
-  final bool hasError;
-  final int currentLineIndex;
-  final AudioPlayer audioPlayer;
+  final bool isSpeaking;
   final Animation<double> pulseAnim;
-  final ScrollController scrollController;
-  final bool isPlaying;
-  final VoidCallback onTogglePlayPause;
-  final String Function(Duration) formatDuration;
-  final String statusText;
+  final VoidCallback onPlay;
 
-  // ignore: prefer_const_constructors_in_immutables
-  _RhymePage({
-    super.key,
+  const _RhymePage({
     required this.rhyme,
     required this.color,
-    required this.isLoading,
-    required this.hasError,
-    required this.currentLineIndex,
-    required this.audioPlayer,
+    required this.isSpeaking,
     required this.pulseAnim,
-    required this.scrollController,
-    required this.isPlaying,
-    required this.onTogglePlayPause,
-    required this.formatDuration,
-    required this.statusText,
+    required this.onPlay,
   });
 
   @override
@@ -321,133 +172,37 @@ class _RhymePage extends StatelessWidget {
               color: AppColors.textDark,
             ),
           ),
-          const SizedBox(height: 20),
-          // Seek bar
-          StreamBuilder<Duration>(
-            stream: audioPlayer.positionStream,
-            builder: (context, posSnap) {
-              final position = posSnap.data ?? Duration.zero;
-              final duration = audioPlayer.duration ?? Duration.zero;
-              final posSeconds = position.inMilliseconds / 1000.0;
-              final durSeconds = duration.inMilliseconds / 1000.0;
-              return Column(
-                children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 4,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 7,
-                      ),
+          const SizedBox(height: 16),
+          // Play button
+          GestureDetector(
+            onTap: onPlay,
+            child: ScaleTransition(
+              scale: isSpeaking ? pulseAnim : const AlwaysStoppedAnimation(1.0),
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withAlpha(102),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
-                    child: Slider(
-                      value: durSeconds > 0
-                          ? posSeconds.clamp(0.0, durSeconds)
-                          : 0.0,
-                      max: durSeconds > 0 ? durSeconds : 1.0,
-                      activeColor: color,
-                      inactiveColor: color.withAlpha(51),
-                      onChanged: durSeconds > 0
-                          ? (value) {
-                              audioPlayer.seek(
-                                Duration(milliseconds: (value * 1000).toInt()),
-                              );
-                            }
-                          : null,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          formatDuration(position),
-                          style: GoogleFonts.balooTamma2(
-                            fontSize: 13,
-                            color: AppColors.textLight,
-                          ),
-                        ),
-                        Text(
-                          formatDuration(duration),
-                          style: GoogleFonts.balooTamma2(
-                            fontSize: 13,
-                            color: AppColors.textLight,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          // Controls row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              IconButton(
-                onPressed: () {
-                  final newPos = audioPlayer.position -
-                      const Duration(seconds: 10);
-                  audioPlayer.seek(
-                    newPos < Duration.zero ? Duration.zero : newPos,
-                  );
-                },
-                icon: Icon(
-                  Icons.replay_10,
-                  size: 32,
-                  color: AppColors.textLight,
+                  ],
+                ),
+                child: Icon(
+                  isSpeaking ? Icons.stop_rounded : Icons.play_arrow_rounded,
+                  color: Colors.white,
+                  size: 40,
                 ),
               ),
-              const SizedBox(width: 24),
-              // Play/Pause button
-              GestureDetector(
-                onTap: onTogglePlayPause,
-                child: ScaleTransition(
-                  scale: isPlaying
-                      ? pulseAnim
-                      : const AlwaysStoppedAnimation(1.0),
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: color,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: color.withAlpha(102),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Center(
-                      child: _buildPlayButtonContent(),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 24),
-              IconButton(
-                onPressed: () {
-                  final newPos = audioPlayer.position +
-                      const Duration(seconds: 10);
-                  final dur = audioPlayer.duration ?? Duration.zero;
-                  audioPlayer.seek(newPos > dur ? dur : newPos);
-                },
-                icon: Icon(
-                  Icons.forward_10,
-                  size: 32,
-                  color: AppColors.textLight,
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 8),
-          // Status text
           Text(
-            statusText,
+            isSpeaking ? 'Tap to stop' : 'Tap to listen \u{1F50A}',
             style: GoogleFonts.balooTamma2(
               fontSize: 15,
               color: AppColors.textLight,
@@ -457,8 +212,7 @@ class _RhymePage extends StatelessWidget {
           // Lyrics card
           Container(
             width: double.infinity,
-            height: rhyme.lines.length * 48.0 + 32,
-            constraints: const BoxConstraints(maxHeight: 320),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: AppColors.cardWhite,
               borderRadius: BorderRadius.circular(24),
@@ -471,39 +225,13 @@ class _RhymePage extends StatelessWidget {
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(22),
-              child: ListView.builder(
-                controller: scrollController,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                itemCount: rhyme.lines.length,
-                itemBuilder: (context, i) {
-                  final isActive = i == currentLineIndex;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 6,
-                      horizontal: 8,
-                    ),
-                    child: AnimatedScale(
-                      scale: isActive ? 1.05 : 1.0,
-                      duration: const Duration(milliseconds: 300),
-                      child: AnimatedDefaultTextStyle(
-                        duration: const Duration(milliseconds: 300),
-                        style: GoogleFonts.balooTamma2(
-                          fontSize: isActive ? 22 : 18,
-                          fontWeight:
-                              isActive ? FontWeight.bold : FontWeight.normal,
-                          color: isActive ? color : AppColors.textLight,
-                        ),
-                        textAlign: TextAlign.center,
-                        child: Text(
-                          rhyme.lines[i].text,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+            child: Text(
+              rhyme.lyrics,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.balooTamma2(
+                fontSize: 20,
+                height: 1.6,
+                color: AppColors.textDark,
               ),
             ),
           ),
@@ -520,25 +248,5 @@ class _RhymePage extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  Widget _buildPlayButtonContent() {
-    if (isLoading) {
-      return const SizedBox(
-        width: 28,
-        height: 28,
-        child: CircularProgressIndicator(
-          color: Colors.white,
-          strokeWidth: 3,
-        ),
-      );
-    }
-    if (hasError) {
-      return const Icon(Icons.refresh, color: Colors.white, size: 40);
-    }
-    if (isPlaying) {
-      return const Icon(Icons.pause_rounded, color: Colors.white, size: 40);
-    }
-    return const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 40);
   }
 }
